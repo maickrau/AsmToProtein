@@ -265,7 +265,7 @@ if __name__ == "__main__":
 	contingency_table_parser.add_argument('--include-gene-info', action="store_true", help='Include information about gene in the output table.')
 	contingency_table_parser.set_defaults(func=contingency_table)
 
-	chi_square_parser = subparsers.add_parser("chisquare", description="Calculate chi squared scores of group vs allele set")
+	chi_square_parser = subparsers.add_parser("chisquare", description="Calculate chi squared P-values of group vs allele set")
 	chi_square_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	chi_square_parser.add_argument('--transcript', help='Name of transcript. If no transcript is given, all transcripts will be used.')
 	chi_square_parser.add_argument('--group', nargs='+', required=True, help='Names of groups (at least two required, multiple possible)')
