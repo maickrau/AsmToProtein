@@ -1,6 +1,21 @@
 #!/usr/bin/env python
 
 import gzip
+import random
+
+def make_random_prefix():
+	chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result = ""
+	for i in range(0, 10):
+		result += chars[random.randint(0, len(chars)-1)]
+	return result
+
+def file_exists(filepath):
+	try:
+		with open(filepath) as f:
+			return True
+	except:
+		return False
 
 def open_maybe_gzipped(filepath):
 	"""

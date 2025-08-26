@@ -22,6 +22,15 @@ def open_file_or_stdout(filename=None):
         if fh is not sys.stdout:
             fh.close()
 
+def add_samples(args):
+	print("Input parameters:", file=sys.stderr)
+	print(f"-i {args.input}", file=sys.stderr)
+	print(f"-db {args.database}", file=sys.stderr)
+	print(f"-t {args.threads}", file=sys.stderr)
+	print(f"--liftoff {args.liftoff}", file=sys.stderr)
+	print(f"--agc {args.agc}", file=sys.stderr)
+	HandleAssembly.handle_multiple_new_samples_liftoff_and_transcripts_from_table(pathlib.Path(args.database), args.input, int(args.threads), args.liftoff, args.agc)
+
 def add_sample(args):
 	print("Input parameters:", file=sys.stderr)
 	print(f"-i {args.input}", file=sys.stderr)
@@ -34,7 +43,7 @@ def add_sample(args):
 	if args.haplotype not in ['1', '2', 'mat', 'pat']:
 		print("--haplotype must be one of '1', '2', 'mat', 'pat'", file=sys.stderr)
 		exit(1)
-	HandleAssembly.handle_new_sample_liftoff_and_transcripts(pathlib.Path(args.database), args.input, args.name, args.haplotype, int(args.threads), args.liftoff, args.agc)
+	HandleAssembly.handle_one_new_sample_liftoff_and_transcripts(pathlib.Path(args.database), args.input, args.name, args.haplotype, int(args.threads), args.liftoff, args.agc)
 
 def list_samples(args):
 	print("Input parameters:", file=sys.stderr)
@@ -226,6 +235,14 @@ if __name__ == "__main__":
 	add_sample_parser.add_argument('--agc', default="agc", help="Path to agc")
 	add_sample_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
 	add_sample_parser.set_defaults(func=add_sample)
+
+	add_samples_parser = subparsers.add_parser("addsamples", description="Add multiple new samples")
+	add_samples_parser.add_argument('-i', '--input', required=True, help='Sample table file (required)')
+	add_samples_parser.add_argument('-db', '--database', required=True, help='Database folder')
+	add_samples_parser.add_argument('--liftoff', default="liftoff", help="Path to liftoff")
+	add_samples_parser.add_argument('--agc', default="agc", help="Path to agc")
+	add_samples_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
+	add_samples_parser.set_defaults(func=add_samples)
 
 	list_sample_parser = subparsers.add_parser("listsamples", description="List all samples")
 	list_sample_parser.add_argument('-db', '--database', required=True, help='Database folder')
