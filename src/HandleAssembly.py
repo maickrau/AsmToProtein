@@ -33,11 +33,11 @@ def add_multiple_sample_proteins_to_database(database_file, sample_info):
 
 	Args:
 		database_file: Base folder
-		sample_info: List of tuples of (sample_annotation_file_path, sample_fasta_file_path, sample_name, sample_haplotype)
+		sample_info: List of tuples of (sample_name, sample_haplotype, sample_fasta_file_path, sample_annotation_file_path)
 	"""
 	print(f"step 1 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	all_processed_transcripts = []
-	for sample_annotation, sample_fasta, sample_name, sample_haplotype in sample_info:
+	for sample_name, sample_haplotype, sample_fasta, sample_annotation in sample_info:
 		all_processed_transcripts.append([])
 		sample_transcripts = TranscriptExtractor.process_sample_transcripts(sample_fasta, sample_annotation)
 		(gene_locations, transcript_locations) = Gff3Parser.parse_gene_transcript_locations(sample_annotation)
@@ -48,7 +48,7 @@ def add_multiple_sample_proteins_to_database(database_file, sample_info):
 			all_processed_transcripts[-1].append((name, sequence, transcript_locations[transcript_id]))
 	print(f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	all_sample_contig_lens = []
-	for sample_annotation, sample_fasta, sample_name, sample_haplotype in sample_info:
+	for sample_name, sample_haplotype, sample_fasta, sample_annotation in sample_info:
 		all_sample_contig_lens.append({})
 		for name, sequence in SequenceReader.stream_sequences(sample_fasta):
 			all_sample_contig_lens[-1][name] = len(sequence)
@@ -69,8 +69,8 @@ def add_multiple_sample_proteins_to_database(database_file, sample_info):
 			allele_name_map[(transcript_id, transcript_sequence)] = allele_id
 		print(f"step 5 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		for sampleindex in range(0, len(sample_info)):
-			sample_name = sample_info[sampleindex][2]
-			sample_haplotype = sample_info[sampleindex][3]
+			sample_name = sample_info[sampleindex][0]
+			sample_haplotype = sample_info[sampleindex][1]
 			print(f"step 6 sample {sample_name} hap {sample_haplotype} time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 			sample_contig_db_ids.append({})
 			sample_contig_lens = all_sample_contig_lens[sampleindex]
@@ -217,12 +217,32 @@ def handle_one_new_sample_liftoff_and_transcripts(database_folder, sample_sequen
 		liftoff_path: Path to liftoff executable
 		agc_path: Path to agc executable
 	"""
-	sample_info = [(sample_sequence, sample_name, sample_haplotype)]
+	sample_info = [(sample_name, sample_haplotype, sample_sequence, None)]
 	handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_info, num_threads, liftoff_path, agc_path)
+
+def run_liftoff(database_folder, input_sequence, output, num_threads, liftoff_path):
+	"""
+	Runs liftoff for one haplotype. Input should be a file containing the contigs / scaffolds of a single haplotype.
+
+	Args:
+		database_folder: Folder where database files are located. Type should be pathlib.Path
+		input_sequence: Path to input sequence file
+		output: Path to output annotation file. Should have ending .gff3.gz
+		liftoff_path: Path to liftoff executable
+	"""
+	sample_name = Util.make_random_prefix()
+	sample_haplotype = Util.make_random_prefix()
+	tmp_folder = database_folder / ("tmp_" + sample_name + "_" + sample_haplotype)
+	try:
+		os.makedirs(tmp_folder, exist_ok=False)
+		handle_new_sample_liftoff_use_tmp_folder(database_folder, tmp_folder, output, input_sequence, sample_name, sample_haplotype, num_threads, liftoff_path)
+	finally:
+		shutil.rmtree(tmp_folder)
 
 def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_folder, sample_table_file, num_threads, liftoff_path, agc_path):
 	"""
 	Handles multiple samples. Adds the sample sequences to the agc database, runs liftoff and gets transcripts, and adds the transcripts to the sample annotation sql database. Creates a temp folder with all temp files which is deleted in the end.
+	If sample table file has a column for annotation, then annotations are copied from there instead of rerun
 
 	Args:
 		database_folder: Folder where database files are located. Type should be pathlib.Path
@@ -233,28 +253,40 @@ def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_fold
 	sample_info = []
 	row_number = 0
 	with open(sample_table_file) as f:
+		has_annotation = None
 		for l in f:
+			if len(l.strip()) == 0: continue
 			row_number += 1
 			parts = l.strip().split("\t")
-			if len(parts) != 3:
+			if len(parts) != 3 and len(parts) != 4:
 				raise RuntimeError(f"Sample table file has wrong format. File should be a tab-separated file with three columns per row. Row {row_number} has {len(parts)} columns.")
 			if row_number == 1:
-				if parts[0].lower() != "assembly":
-					raise RuntimeError(f"Sample table file has wrong format. First column should be assembly file. Header instead has \"{parts[0]}\".")
-				if parts[1].lower() != "sample":
-					raise RuntimeError(f"Sample table file has wrong format. Second column should be sample name. Header instead has \"{parts[1]}\".")
-				if parts[2].lower() != "haplotype":
-					raise RuntimeError(f"Sample table file has wrong format. Third column should be haplotype name. Header instead has \"{parts[2]}\".")
+				if parts[0].lower() != "sample":
+					raise RuntimeError(f"Sample table file has wrong format. First column should be sample name. Header instead has \"{parts[0]}\".")
+				if parts[1].lower() != "haplotype":
+					raise RuntimeError(f"Sample table file has wrong format. Second column should be haplotype name. Header instead has \"{parts[1]}\".")
+				if parts[2].lower() != "assembly":
+					raise RuntimeError(f"Sample table file has wrong format. Third column should be assembly file. Header instead has \"{parts[2]}\".")
+				if len(parts) >= 4 and parts[3].lower() != "annotation":
+					raise RuntimeError(f"Sample table file has wrong format. Fourth column should be annotation file. Header instead has \"{parts[3]}\".")
+				has_annotation = (len(parts) == 4)
 				continue
-			if parts[2] not in ["1", "2", "mat", "pat"]:
+			if parts[1] not in ["1", "2", "mat", "pat"]:
 				raise RuntimeError(f"Sample table file has wrong format. Row {row_number} haplotype is \"{parts[2]}\", expected one of \"1\", \"2\", \"mat\", \"pat\"")
-			sample_info.append((parts[0], parts[1], parts[2]))
-			if not Util.file_exists(parts[0]):
-				raise RuntimeError(f"Sample assembly file in row {row_number} cannot be read: file \"{parts[0]}\", sample \"{parts[1]}\" haplotype \"{parts[2]}\"")
+			annotation = None
+			if has_annotation:
+				if len(parts) >= 4:
+					if parts[3] is not None and len(parts[3]) >= 1:
+						annotation = parts[3]
+			sample_info.append((parts[0], parts[1], parts[2], annotation))
+			if not Util.file_exists(parts[2]):
+				raise RuntimeError(f"Sample assembly file in row {row_number} cannot be read: file \"{parts[2]}\", sample \"{parts[0]}\" haplotype \"{parts[1]}\"")
+			if annotation is not None and not Util.file_exists(annotation):
+				raise RuntimeError(f"Sample annotation file in row {row_number} cannot be read: file \"{parts[3]}\", sample \"{parts[0]}\" haplotype \"{parts[1]}\"")
 	has_duplicates = False
 	sample_name_and_haplotypes = set()
 	for row in sample_info:
-		key = (row[1], row[2])
+		key = (row[0], row[1])
 		if key in sample_name_and_haplotypes:
 			raise RuntimeError(f"Duplicate sample and haplotype: sample \"{key[0]}\" haplotype \"{key[1]}\"")
 		sample_name_and_haplotypes.add(key)
@@ -263,15 +295,15 @@ def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_fold
 
 def handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_info, num_threads, liftoff_path, agc_path):
 	"""
-	Handles multiple new samples. Adds the sample sequences to the agc database, runs liftoff and gets transcripts, and adds the transcripts to the sample annotation sql database. Creates a temp folder with all temp files which is deleted in the end.
+	Handles multiple new samples. Adds the sample sequences to the agc database, runs liftoff if necessary and gets transcripts, and adds the transcripts to the sample annotation sql database. Creates a temp folder with all temp files which is deleted in the end.
 
 	Args:
 		database_folder: Folder where database files are located. Type should be pathlib.Path
-		sample_info: List of tuples of (sample_sequence_file_path, sample_name, sample_haplotype)
+		sample_info: List of tuples of (sample_name, sample_haplotype, sample_sequence_file_path, sample_annotation_file_path)
 		liftoff_path: Path to liftoff executable
 		agc_path: Path to agc executable
 	"""
-	for _, sample_name, sample_haplotype in sample_info:
+	for sample_name, sample_haplotype, _, _ in sample_info:
 		sample_exists = check_if_sample_exists(database_folder, sample_name, sample_haplotype)
 		if sample_exists:
 			raise RuntimeError(f"Sample already exists: name \"{sample_name}\" haplotype \"{sample_haplotype}\"")
@@ -283,13 +315,17 @@ def handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_
 		annotation_folder = tmp_base_folder / "sample_annotations"
 		os.makedirs(annotation_folder, exist_ok=False)
 		sample_info_with_annotations = []
-		for sample_sequence, sample_name, sample_haplotype in sample_info:
-			print(f"{datetime.datetime.now().astimezone()}: Running liftoff for sample \"{sample_name}\" haplotype \"{sample_haplotype}\"")
-			sample_annotation_file = annotation_folder / (sample_name + "_" + sample_haplotype + ".gff3.gz")
-			tmp_folder = tmp_base_folder / ("tmp_" + sample_name + "_" + sample_haplotype)
-			os.makedirs(tmp_folder, exist_ok=False)
-			handle_new_sample_liftoff_use_tmp_folder(database_folder, tmp_folder, sample_annotation_file, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path)
-			sample_info_with_annotations.append((sample_annotation_file, tmp_folder / (sample_name + "_" + sample_haplotype + ".fa"), sample_name, sample_haplotype))
+		for sample_name, sample_haplotype, sample_sequence, annotation in sample_info:
+			if annotation:
+				print(f"{datetime.datetime.now().astimezone()}: Using annotations for sample \"{sample_name}\" haplotype \"{sample_haplotype}\" from path \"{annotation}\"")
+				sample_info_with_annotations.append((sample_name, sample_haplotype, sample_sequence, annotation))
+			else:
+				print(f"{datetime.datetime.now().astimezone()}: Running liftoff for sample \"{sample_name}\" haplotype \"{sample_haplotype}\"")
+				sample_annotation_file = annotation_folder / (sample_name + "_" + sample_haplotype + ".gff3.gz")
+				tmp_folder = tmp_base_folder / ("tmp_" + sample_name + "_" + sample_haplotype)
+				os.makedirs(tmp_folder, exist_ok=False)
+				handle_new_sample_liftoff_use_tmp_folder(database_folder, tmp_folder, sample_annotation_file, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path)
+				sample_info_with_annotations.append((sample_name, sample_haplotype, tmp_folder / (sample_name + "_" + sample_haplotype + ".fa"), sample_annotation_file))
 		print(f"{datetime.datetime.now().astimezone()}: Adding sample sequences to temporary agc file")
 		temp_agc_path = add_samples_to_agc(database_folder, tmp_folder, sample_info_with_annotations, num_threads, agc_path)
 		print(f"{datetime.datetime.now()}.astimezone(): Adding sample proteins to sql database")
@@ -307,10 +343,10 @@ def copy_annotations(database_folder, sample_info_with_annotations):
 
 	Args:
 		database_folder: Folder where database files are located. Type should be pathlib.Path
-		sample_info_with_annotations: List of tuples of (sample_annotation_file, sample_sequence_file, sample_name, sample_haplotype)
+		sample_info_with_annotations: List of tuples of (sample_name, sample_haplotype, sample_sequence_file, sample_annotation)
 	"""
 	sample_annotation_folder = database_folder / "sample_annotations"
-	for annotation, _, sample_name, sample_haplotype in sample_info_with_annotations:
+	for sample_name, sample_haplotype, _, annotation in sample_info_with_annotations:
 		cp_command = ["cp", str(annotation), str(sample_annotation_folder / (sample_name + "_" + sample_haplotype + ".gff3.gz"))]
 		cp_result = subprocess.run(cp_command)
 		if cp_result.returncode != 0:
@@ -357,7 +393,7 @@ def add_samples_to_agc(database_folder, tmp_folder, sample_info, num_threads, ag
 	Args:
 		database_folder: Folder where database files are located. Type should be pathlib.Path
 		tmp_folder: Temporary folder. Final temporary agc will will be stored here. Type should be pathlib.Path
-		sample_info: List of tuples of (sample_annotation_file, sample_sequence_file, sample_name, sample_sequence)
+		sample_info: List of tuples of (sample_name, sample_haplotype, sample_sequence_file, sample_annotation_file)
 		num_threads: Number of threads
 		agc_path: Path to agc binary
 
@@ -365,7 +401,7 @@ def add_samples_to_agc(database_folder, tmp_folder, sample_info, num_threads, ag
 		Path to the completed temporary agc file in type pathlib.Path
 	"""
 	initial_agc_file = database_folder / "sequences.agc"
-	for _, sample_sequence, sample_name, sample_haplotype in sample_info:
+	for sample_name, sample_haplotype, sample_sequence, _ in sample_info:
 		next_file = tmp_folder / (Util.make_random_prefix() + ".agc")
 		agc_command = [agc_path, "append", str(initial_agc_file), str(sample_sequence)]
 		with open(str(next_file), "wb") as new_agc:

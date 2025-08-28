@@ -86,6 +86,30 @@ def check_if_haplotypes_are_fine(database_path):
 						result.append(f"Sample \"{sample}\" has unexpected haplotypes, expected either \"1 & 2\" or \"mat & pat\", sample has \"{" & ".join(sample_haplotypes[sample])}\"")
 		return result
 
+def basic_stats(database_path):
+	"""
+	Print a bunch of basic stats about the database
+
+	Args:
+		database_path: Path to sql database file. Type should be pathlib.Path
+	"""
+	with sqlite3.connect(str(database_path)) as connection:
+		cursor = connection.cursor()
+		sample_count = cursor.execute("SELECT COUNT(*) FROM Sample").fetchall()[0][0]
+		print(f"Number of samples including reference: {sample_count}")
+		print(f"Number of samples excluding reference: {sample_count-1}")
+		haplotype_count = cursor.execute("SELECT COUNT(*) FROM Haplotype").fetchall()[0][0]
+		print(f"Number of haplotypes including reference: {haplotype_count}")
+		print(f"Number of haplotypes excluding reference: {haplotype_count-1}")
+		gene_count = cursor.execute("SELECT COUNT(*) FROM Gene").fetchall()[0][0]
+		print(f"Number of genes: {gene_count}")
+		transcript_count = cursor.execute("SELECT COUNT(*) FROM Transcript").fetchall()[0][0]
+		print(f"Number of transcripts: {transcript_count}")
+		isoform_count = cursor.execute("SELECT COUNT(*) FROM Allele").fetchall()[0][0]
+		print(f"Number of distinct isoforms: {isoform_count}")
+		sample_allele_count = cursor.execute("SELECT COUNT(*) FROM SampleProtein").fetchall()[0][0]
+		print(f"Number of alleles in all samples: {sample_allele_count}")
+
 def get_all_transcripts(database_path):
 	"""
 	Gets all transcript names

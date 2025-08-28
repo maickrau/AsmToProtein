@@ -22,6 +22,18 @@ def open_file_or_stdout(filename=None):
         if fh is not sys.stdout:
             fh.close()
 
+def run_liftoff(args):
+	print("Input parameters:", file=sys.stderr)
+	print(f"-i {args.input}", file=sys.stderr)
+	print(f"-o {args.output}", file=sys.stderr)
+	print(f"-db {args.database}", file=sys.stderr)
+	print(f"-t {args.threads}", file=sys.stderr)
+	print(f"--liftoff {args.liftoff}", file=sys.stderr)
+	if args.output[-8:] != ".gff3.gz":
+		print("-o should have file ending .gff3.gz", file=sys.stderr)
+		exit(1)
+	HandleAssembly.run_liftoff(pathlib.Path(args.database), args.input, args.output, int(args.threads), args.liftoff)
+
 def add_samples(args):
 	print("Input parameters:", file=sys.stderr)
 	print(f"-i {args.input}", file=sys.stderr)
@@ -62,6 +74,11 @@ def list_groups(args):
 		print("Sample\tGroups", file=f)
 		for sample, groups in DatabaseOperations.get_sample_groups(pathlib.Path(args.database) / "sample_info.db"):
 			print(f"{sample}\t{",".join(groups)}", file=f)
+
+def stats(args):
+	print("Input parameters:", file=sys.stderr)
+	print(f"-db {args.database}", file=sys.stderr)
+	DatabaseOperations.basic_stats(pathlib.Path(args.database) / "sample_info.db")
 
 def add_group(args):
 	print("Input parameters:", file=sys.stderr)
@@ -236,6 +253,14 @@ if __name__ == "__main__":
 	add_sample_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
 	add_sample_parser.set_defaults(func=add_sample)
 
+	run_liftoff_parser = subparsers.add_parser("liftoff", description="Run liftoff for one haplotype")
+	run_liftoff_parser.add_argument('-i', '--input', required=True, help='Sample sequence file (required)')
+	run_liftoff_parser.add_argument('-o', '--output', required=True, help='Output annotation file')
+	run_liftoff_parser.add_argument('-db', '--database', required=True, help='Database folder')
+	run_liftoff_parser.add_argument('--liftoff', default="liftoff", help="Path to liftoff")
+	run_liftoff_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
+	run_liftoff_parser.set_defaults(func=run_liftoff)
+
 	add_samples_parser = subparsers.add_parser("addsamples", description="Add multiple new samples")
 	add_samples_parser.add_argument('-i', '--input', required=True, help='Sample table file (required)')
 	add_samples_parser.add_argument('-db', '--database', required=True, help='Database folder')
@@ -269,6 +294,10 @@ if __name__ == "__main__":
 	update_names_parser = subparsers.add_parser("renamealleles", description="Rename alleles according to coverage")
 	update_names_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	update_names_parser.set_defaults(func=update_names)
+
+	stats_parser = subparsers.add_parser("stats", description="Print basic statistics about database")
+	stats_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
+	stats_parser.set_defaults(func=stats)
 
 	validate_parser = subparsers.add_parser("validate", description="Check sample haplotype validity")
 	validate_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
