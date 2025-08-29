@@ -694,7 +694,7 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 		raise RuntimeError("Could not check reference file md5sum.")
 	refannotation_md5sum_check = subprocess.run(["md5sum", reference_annotation], capture_output=True, text=True)
 	if refannotation_md5sum_check.returncode != 0:
-		raise RuntimeError("Could not check reference file md5sum.")
+		raise RuntimeError("Could not check annotation file md5sum.")
 	with open(folder / "info.txt", "w") as f:
 		print(f"Created on {datetime.datetime.now().astimezone()}", file=f)
 		print(f"Reference fasta: {reference_fasta}", file=f)
@@ -712,7 +712,7 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 	ref_fasta = folder / "reference.fa"
 	HandleAssembly.prepare_fasta(reference_fasta, ref_fasta)
 	copy_command = ["cp", reference_annotation, str(folder / "reference.gff3")]
-	print(f"Copying reference with command:", file=sys.stderr)
+	print(f"Copying reference annotation with command:", file=sys.stderr)
 	print(f"{' '.join(copy_command)}", file=sys.stderr)
 	copy_result = subprocess.run(copy_command)
 	if copy_result.returncode != 0:
