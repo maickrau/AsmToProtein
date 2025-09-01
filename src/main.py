@@ -177,19 +177,29 @@ def export_allelesets(args):
 					print(f"{transcript}\t{name}\t{sequence}", file=f)
 
 def chi_square(args):
-	groups = list(args.group)
-	groups.sort()
+	groups = []
+	if args.group:
+		groups = list(args.group)
+		groups.sort()
 	print("Input parameters:", file=sys.stderr)
 	print(f"-db {args.database}", file=sys.stderr)
 	print(f"-o {args.output}", file=sys.stderr)
 	print(f"--transcript {args.transcript}", file=sys.stderr)
 	print(f"--group {", ".join(groups)}", file=sys.stderr)
+	print(f"--table {args.table}", file=sys.stderr)
 	print(f"--include-gene-info {args.include_gene_info}", file=sys.stderr)
-	if len(groups) < 2:
-		print("At least two groups are required", file=sys.stderr)
+	if len(groups) < 2 and args.table is None:
+		print("Either sample table (--sample) or at least two groups (--group) are required", file=sys.stderr)
 		print("Groups should all be listed at once (eg. \"--group group1 group2 group3\", not \"--group group1 --group group2 --group group3\")", file=sys.stderr)
 		exit(1)
-	total_sample_size, group_counts, p_values = Analysis.chi_squared_test(pathlib.Path(args.database) / "sample_info.db", groups, args.transcript)
+	if args.table is not None and len(groups) >= 2:
+		print("Cannot use both --sample and --group parameters", file=sys.stderr)
+		print("Select only either sample table (--sample) or two or more groups (--group)", file=sys.stderr)
+		exit(1)
+	if len(groups) >= 2:
+		total_sample_size, group_counts, p_values = Analysis.chi_squared_test(pathlib.Path(args.database) / "sample_info.db", groups, args.transcript)
+	else:
+		total_sample_size, group_counts, p_values = Analysis.chi_squared_test_by_table(pathlib.Path(args.database) / "sample_info.db", args.table, args.transcript)
 	print(f"Total sample size: {total_sample_size}", file=sys.stderr)
 	print("Group sample sizes:", file=sys.stderr)
 	for group, count in group_counts.items():
@@ -314,7 +324,8 @@ if __name__ == "__main__":
 	chi_square_parser = subparsers.add_parser("chisquare", description="Calculate chi squared P-values of group vs allele set")
 	chi_square_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	chi_square_parser.add_argument('--transcript', help='Name of transcript. If no transcript is given, all transcripts will be used.')
-	chi_square_parser.add_argument('--group', nargs='+', required=True, help='Names of groups (at least two required, multiple possible)')
+	chi_square_parser.add_argument('--group', nargs='*', help='Names of groups to include')
+	chi_square_parser.add_argument('--table', help='Table with samples per group to include')
 	chi_square_parser.add_argument('-o', '--output', default="-", help='Output file (- for stdout) (default -)')
 	chi_square_parser.add_argument('--include-gene-info', action="store_true", help='Include information about gene in the output table.')
 	chi_square_parser.set_defaults(func=chi_square)

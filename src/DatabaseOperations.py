@@ -11,6 +11,7 @@ import itertools
 import SequenceReader
 import Gff3Parser
 import HandleAssembly
+import Util
 
 def allele_sort_order(allele):
 	"""
@@ -48,6 +49,55 @@ def get_allele_name(index):
 		if index < 26: break
 		index = int(index/26)
 	return "".join(result[::-1])
+
+def remove_temporary_groups(database_path, groups):
+	"""
+	Removes temporary groups.
+
+	Args:
+		database_path: Path to sql database file. Type should be pathlib.Path
+		groups: List of group names
+	"""
+	with sqlite3.connect(str(database_path)) as connection:
+		cursor = connection.cursor()
+		cursor.execute(f"DELETE FROM SampleGroup WHERE GroupName IN ({",".join("?" for group in groups)})", groups)
+
+def add_temporary_groups(database_path, groups):
+	"""
+	Creates temporary groups which contain specified samples
+
+	Args:
+		database_path: Path to sql database file. Type should be pathlib.Path
+		groups: Dictionary of sample -> group
+
+	Returns:
+		Dictionary of name mappings created_temporary_group_name -> original_group_name
+	"""
+	name_mapping = {}
+	for _, group in groups.items():
+		if group not in name_mapping: name_mapping[group] = "tmp_" + Util.make_random_prefix()
+	with sqlite3.connect(str(database_path)) as connection:
+		cursor = connection.cursor()
+		for original_name in name_mapping:
+			# make sure temp names are unique and unused, generate new ones until so
+			while True:
+				temp_name = name_mapping[original_name]
+				found = cursor.execute(f"SELECT COUNT(*) FROM SampleGroup WHERE GroupName=?", (temp_name,)).fetchone()
+				if found[0] == 0:
+					break
+				name_mapping[original_name] = "tmp_" + Util.make_random_prefix()
+				continue
+		additions = []
+		sample_db_id = {}
+		for sample, db_id in cursor.execute("SELECT Name, Id FROM Sample").fetchall():
+			sample_db_id[sample] = db_id
+		for sample, group in groups.items():
+			additions.append((sample_db_id[sample], name_mapping[group]))
+		cursor.executemany("INSERT INTO SampleGroup (SampleId, GroupName) VALUES (?, ?)", additions)
+	result = {}
+	for real_name, temporary_name in name_mapping.items():
+		result[temporary_name] = real_name
+	return result
 
 def check_if_haplotypes_are_fine(database_path):
 	"""
@@ -545,7 +595,6 @@ def get_alleleset_contingency_table_by_group(database_path, transcript_name, gro
 			if len(groups_per_sample[sample]) >= 2:
 				raise RuntimeError(f"Samples are shared between groups {", ".join(groups_per_sample[sample])}")
 		allelesets_per_sample = {}
-		query_plan = cursor.execute(f"EXPLAIN QUERY PLAN SELECT Haplotype.SampleId, Allele.Name FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN SampleGroup ON Haplotype.SampleId=SampleGroup.SampleId WHERE Transcript.Name = ? AND SampleGroup.GroupName IN ({",".join("?" for group in groups)})", tuple([transcript_name] + groups)).fetchall()
 		for sample, allele in cursor.execute(f"SELECT Haplotype.SampleId, Allele.Name FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN SampleGroup ON Haplotype.SampleId=SampleGroup.SampleId WHERE Transcript.Name = ? AND SampleGroup.GroupName IN ({",".join("?" for group in groups)})", tuple([transcript_name] + groups)).fetchall():
 			if sample not in allelesets_per_sample: allelesets_per_sample[sample] = []
 			allelesets_per_sample[sample].append(allele)
