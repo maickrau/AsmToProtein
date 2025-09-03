@@ -317,23 +317,23 @@ def handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_
 		sample_info_with_annotations = []
 		for sample_name, sample_haplotype, sample_sequence, annotation in sample_info:
 			if annotation:
-				print(f"{datetime.datetime.now().astimezone()}: Using annotations for sample \"{sample_name}\" haplotype \"{sample_haplotype}\" from path \"{annotation}\"")
+				print(f"{datetime.datetime.now().astimezone()}: Using annotations for sample \"{sample_name}\" haplotype \"{sample_haplotype}\" from path \"{annotation}\"", file=sys.stderr)
 				sample_info_with_annotations.append((sample_name, sample_haplotype, sample_sequence, annotation))
 			else:
-				print(f"{datetime.datetime.now().astimezone()}: Running liftoff for sample \"{sample_name}\" haplotype \"{sample_haplotype}\"")
+				print(f"{datetime.datetime.now().astimezone()}: Running liftoff for sample \"{sample_name}\" haplotype \"{sample_haplotype}\"", file=sys.stderr)
 				sample_annotation_file = annotation_folder / (sample_name + "_" + sample_haplotype + ".gff3.gz")
 				tmp_folder = tmp_base_folder / ("tmp_" + sample_name + "_" + sample_haplotype)
 				os.makedirs(tmp_folder, exist_ok=False)
 				handle_new_sample_liftoff_use_tmp_folder(database_folder, tmp_folder, sample_annotation_file, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path)
 				sample_info_with_annotations.append((sample_name, sample_haplotype, tmp_folder / (sample_name + "_" + sample_haplotype + ".fa"), sample_annotation_file))
-		print(f"{datetime.datetime.now().astimezone()}: Adding sample sequences to temporary agc file")
+		print(f"{datetime.datetime.now().astimezone()}: Adding sample sequences to temporary agc file", file=sys.stderr)
 		temp_agc_path = add_samples_to_agc(database_folder, tmp_base_folder, sample_info_with_annotations, num_threads, agc_path)
-		print(f"{datetime.datetime.now()}.astimezone(): Adding sample proteins to sql database")
+		print(f"{datetime.datetime.now()}.astimezone(): Adding sample proteins to sql database", file=sys.stderr)
 		add_multiple_sample_proteins_to_database(database_folder / "sample_info.db", sample_info_with_annotations)
-		print(f"{datetime.datetime.now().astimezone()}: Copying temporary agc and annotation files to database folder")
+		print(f"{datetime.datetime.now().astimezone()}: Copying temporary agc and annotation files to database folder", file=sys.stderr)
 		copy_annotations(database_folder, sample_info_with_annotations)
 		copy_agc(temp_agc_path, database_folder)
-		print(f"{datetime.datetime.now().astimezone()}: Finished adding samples successfully")
+		print(f"{datetime.datetime.now().astimezone()}: Finished adding samples successfully", file=sys.stderr)
 	finally:
 		shutil.rmtree(tmp_base_folder)
 
@@ -402,6 +402,7 @@ def add_samples_to_agc(database_folder, tmp_folder, sample_info, num_threads, ag
 	"""
 	initial_agc_file = database_folder / "sequences.agc"
 	for sample_name, sample_haplotype, sample_sequence, _ in sample_info:
+		print(f"{datetime.datetime.now().astimezone()}: Adding sample {sample_name} haplotype {sample_haplotype} to temporary agc file", file=sys.stderr)
 		next_file = tmp_folder / (Util.make_random_prefix() + ".agc")
 		agc_command = [agc_path, "append", str(initial_agc_file), str(sample_sequence)]
 		with open(str(next_file), "wb") as new_agc:
