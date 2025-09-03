@@ -327,7 +327,7 @@ def handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_
 				handle_new_sample_liftoff_use_tmp_folder(database_folder, tmp_folder, sample_annotation_file, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path)
 				sample_info_with_annotations.append((sample_name, sample_haplotype, tmp_folder / (sample_name + "_" + sample_haplotype + ".fa"), sample_annotation_file))
 		print(f"{datetime.datetime.now().astimezone()}: Adding sample sequences to temporary agc file")
-		temp_agc_path = add_samples_to_agc(database_folder, tmp_folder, sample_info_with_annotations, num_threads, agc_path)
+		temp_agc_path = add_samples_to_agc(database_folder, tmp_base_folder, sample_info_with_annotations, num_threads, agc_path)
 		print(f"{datetime.datetime.now()}.astimezone(): Adding sample proteins to sql database")
 		add_multiple_sample_proteins_to_database(database_folder / "sample_info.db", sample_info_with_annotations)
 		print(f"{datetime.datetime.now().astimezone()}: Copying temporary agc and annotation files to database folder")
