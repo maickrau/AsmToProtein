@@ -405,7 +405,7 @@ def add_samples_to_agc(database_folder, tmp_folder, sample_info, num_threads, ag
 	for sample_name, sample_haplotype, sample_sequence, _ in sample_info:
 		agc_file_number += 1
 		print(f"{datetime.datetime.now().astimezone()}: Adding sample {sample_name} haplotype {sample_haplotype} to temporary agc file", file=sys.stderr)
-		next_file = tmp_folder / "tmp_agc_" + str(agc_file_number % 2) + ".agc"
+		next_file = tmp_folder / ("tmp_agc_" + str(agc_file_number % 2) + ".agc")
 		agc_command = [agc_path, "append", str(initial_agc_file), str(sample_sequence)]
 		with open(str(next_file), "wb") as new_agc:
 			agc_result = subprocess.run(agc_command, stdout=new_agc)
