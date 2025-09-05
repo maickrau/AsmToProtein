@@ -2,6 +2,7 @@
 
 import os
 import sys
+import datetime
 import Gff3Parser
 import SequenceReader
 
