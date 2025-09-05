@@ -115,16 +115,15 @@ def process_sample_transcripts(input_file, lifted_gff):
 	import sys
 
 	if not os.path.exists(lifted_gff):
-		print(f"Warning: lifted annotation GFF not found, skipping.", file=sys.stderr)
-		return []
+		raise RuntimeError(f"Lifted annotation GFF not found")
 
-	print(f"Reading sequences of sample.", file=sys.stderr)
+	print(f"{datetime.datetime.now().astimezone()}: Reading sequences of sample.", file=sys.stderr)
 	contig_seqs = {name: seq for name, seq in SequenceReader.stream_sequences(input_file)}
 
-	print(f"Reading annotation of sample.", file=sys.stderr)
+	print(f"{datetime.datetime.now().astimezone()}: Reading annotation of sample.", file=sys.stderr)
 	transcripts = Gff3Parser.parse_gff3_transcripts_with_exons(lifted_gff)
 
-	print(f"Parsing transcripts.", file=sys.stderr)
+	print(f"{datetime.datetime.now().astimezone()}: Parsing transcripts.", file=sys.stderr)
 	transcripts_data = []
 	for tx in transcripts:
 		if not tx['exons']:
