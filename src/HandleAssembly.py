@@ -38,6 +38,7 @@ def add_multiple_sample_proteins_to_database(database_file, sample_info):
 	print(f"step 1 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	all_processed_transcripts = []
 	for sample_name, sample_haplotype, sample_fasta, sample_annotation in sample_info:
+		print(f"{datetime.datetime.now().astimezone()}: Get transcripts of sample {sample_name} haplotype {sample_haplotype}", file=sys.stderr)
 		all_processed_transcripts.append([])
 		sample_transcripts = TranscriptExtractor.process_sample_transcripts(sample_fasta, sample_annotation)
 		(gene_locations, transcript_locations) = Gff3Parser.parse_gene_transcript_locations(sample_annotation)
@@ -406,7 +407,7 @@ def add_samples_to_agc(database_folder, tmp_folder, sample_info, num_threads, ag
 		agc_file_number += 1
 		print(f"{datetime.datetime.now().astimezone()}: Adding sample {sample_name} haplotype {sample_haplotype} to temporary agc file", file=sys.stderr)
 		next_file = tmp_folder / ("tmp_agc_" + str(agc_file_number % 2) + ".agc")
-		agc_command = [agc_path, "append", str(initial_agc_file), str(sample_sequence)]
+		agc_command = [agc_path, "append", "-t", str(num_threads), str(initial_agc_file), str(sample_sequence)]
 		with open(str(next_file), "wb") as new_agc:
 			agc_result = subprocess.run(agc_command, stdout=new_agc)
 		if agc_result.returncode != 0:
