@@ -8,6 +8,8 @@ import subprocess
 import shutil
 import sqlite3
 import datetime
+import threading
+import queue
 import Gff3Parser
 import TranscriptExtractor
 import SequenceReader
@@ -27,33 +29,83 @@ def prepare_fasta(input_path, output_path):
 			print(">" + name, file=f)
 			print(sequence, file=f)
 
-def add_multiple_sample_proteins_to_database(database_file, sample_info):
+def add_multiple_sample_proteins_to_database(database_file, sample_info, num_threads):
 	"""
 	Adds proteins of a sample to the database. Assumes that liftoff has already been ran
 
 	Args:
 		database_file: Base folder
 		sample_info: List of tuples of (sample_name, sample_haplotype, sample_fasta_file_path, sample_annotation_file_path)
+		num_threads: Number of threads to use. Processing each sample uses one thread but multiple samples can be processed in parallel
 	"""
 	print(f"step 1 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	threads = []
+	def process_transcripts(sample_info, input_id_queue, output_transcript_queue):
+		while True:
+			if input_id_queue.empty(): return
+			index = input_id_queue.get()
+			sample_name, sample_haplotype, sample_fasta, sample_annotation = sample_info[index]
+			print(f"{datetime.datetime.now().astimezone()}: Get transcripts of sample {sample_name} haplotype {sample_haplotype}", file=sys.stderr)
+			result_here = []
+			sample_transcripts = TranscriptExtractor.process_sample_transcripts(sample_fasta, sample_annotation)
+			(gene_locations, transcript_locations) = Gff3Parser.parse_gene_transcript_locations(sample_annotation)
+			for transcript_id, sequence, extra_copy in sample_transcripts:
+				name = transcript_id
+				if extra_copy != 0:
+					name = "_".join(name.split("_")[:-1])
+				result_here.append((name, sequence, transcript_locations[transcript_id]))
+			output_transcript_queue.put((index, result_here))
+	input_ids = queue.Queue(len(sample_info))
+	output_transcripts = queue.Queue(len(sample_info))
+	for i in range(0, len(sample_info)):
+		input_ids.put(i)
+	for i in range(0, num_threads):
+		threads.append(threading.Thread(target=process_transcripts, args=(sample_info, input_ids, output_transcripts)))
+	for i in range(0, num_threads):
+		threads[i].start()
+	for i in range(0, num_threads):
+		threads[i].join()
 	all_processed_transcripts = []
-	for sample_name, sample_haplotype, sample_fasta, sample_annotation in sample_info:
-		print(f"{datetime.datetime.now().astimezone()}: Get transcripts of sample {sample_name} haplotype {sample_haplotype}", file=sys.stderr)
-		all_processed_transcripts.append([])
-		sample_transcripts = TranscriptExtractor.process_sample_transcripts(sample_fasta, sample_annotation)
-		(gene_locations, transcript_locations) = Gff3Parser.parse_gene_transcript_locations(sample_annotation)
-		for transcript_id, sequence, extra_copy in sample_transcripts:
-			name = transcript_id
-			if extra_copy != 0:
-				name = "_".join(name.split("_")[:-1])
-			all_processed_transcripts[-1].append((name, sequence, transcript_locations[transcript_id]))
+	for i in range(0, len(sample_info)):
+		all_processed_transcripts.append(None)
+	for i in range(0, len(sample_info)):
+		index, processed_transcripts = output_transcripts.get()
+		assert index < len(all_processed_transcripts)
+		assert all_processed_transcripts[index] is None
+		all_processed_transcripts[index] = processed_transcripts
+	for i in range(0, len(sample_info)):
+		assert all_processed_transcripts[i] is not None
 	print(f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	threads = []
+	input_ids = queue.Queue(len(sample_info))
+	def get_contig_lengths(sample_info, input_id_queue, output_contigs_queue):
+		while True:
+			if input_id_queue.empty(): return
+			index = input_id_queue.get()
+			sample_name, sample_haplotype, sample_fasta, sample_annotation = sample_info[index]
+			result = {}
+			for name, sequence in SequenceReader.stream_sequences(sample_fasta):
+				result[name] = len(sequence)
+			output_contigs_queue.put((index, result))
+	for i in range(0, len(sample_info)):
+		input_ids.put(i)
+	output_contig_lengths = queue.Queue(len(sample_info))
+	for i in range(0, num_threads):
+		threads.append(threading.Thread(target=get_contig_lengths, args=(sample_info, input_ids, output_contig_lengths)))
+	for i in range(0, num_threads):
+		threads[i].start()
+	for i in range(0, num_threads):
+		threads[i].join()
 	all_sample_contig_lens = []
-	for sample_name, sample_haplotype, sample_fasta, sample_annotation in sample_info:
-		all_sample_contig_lens.append({})
-		for name, sequence in SequenceReader.stream_sequences(sample_fasta):
-			all_sample_contig_lens[-1][name] = len(sequence)
-
+	for i in range(0, len(sample_info)):
+		all_sample_contig_lens.append(None)
+	for i in range(0, len(sample_info)):
+		index, sample_contig_lens = output_contig_lengths.get()
+		assert index < len(all_sample_contig_lens)
+		assert all_sample_contig_lens[index] is None
+		all_sample_contig_lens[index] = sample_contig_lens
+	for i in range(0, len(sample_info)):
+		assert all_sample_contig_lens[i] is not None
 	transcript_id_map = {}
 	allele_name_map = {}
 	sample_contig_db_ids = []
@@ -330,7 +382,7 @@ def handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_
 		print(f"{datetime.datetime.now().astimezone()}: Adding sample sequences to temporary agc file", file=sys.stderr)
 		temp_agc_path = add_samples_to_agc(database_folder, tmp_base_folder, sample_info_with_annotations, num_threads, agc_path)
 		print(f"{datetime.datetime.now()}.astimezone(): Adding sample proteins to sql database", file=sys.stderr)
-		add_multiple_sample_proteins_to_database(database_folder / "sample_info.db", sample_info_with_annotations)
+		add_multiple_sample_proteins_to_database(database_folder / "sample_info.db", sample_info_with_annotations, num_threads)
 		print(f"{datetime.datetime.now().astimezone()}: Copying temporary agc and annotation files to database folder", file=sys.stderr)
 		copy_annotations(database_folder, sample_info_with_annotations)
 		copy_agc(temp_agc_path, database_folder)
