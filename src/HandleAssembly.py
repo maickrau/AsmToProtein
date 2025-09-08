@@ -47,16 +47,18 @@ def add_multiple_sample_proteins_to_database(database_file, sample_info, num_thr
 			sample_name, sample_haplotype, sample_fasta, sample_annotation = sample_info[index]
 			print(f"{datetime.datetime.now().astimezone()}: Get transcripts of sample {sample_name} haplotype {sample_haplotype}", file=sys.stderr)
 			result_here = []
-			sample_transcripts = TranscriptExtractor.process_sample_transcripts(sample_fasta, sample_annotation)
-			(gene_locations, transcript_locations) = Gff3Parser.parse_gene_transcript_locations(sample_annotation)
+			(sample_transcripts, gene_locations, transcript_locations, contig_lengths) = TranscriptExtractor.process_sample_transcripts_and_contigs(sample_fasta, sample_annotation)
+#			sample_transcripts = TranscriptExtractor.process_sample_transcripts(sample_fasta, sample_annotation)
+#			(gene_locations, transcript_locations) = Gff3Parser.parse_gene_transcript_locations(sample_annotation)
 			for transcript_id, sequence, extra_copy in sample_transcripts:
 				name = transcript_id
 				if extra_copy != 0:
 					name = "_".join(name.split("_")[:-1])
 				result_here.append((name, sequence, transcript_locations[transcript_id]))
-			output_transcript_queue.put((index, result_here))
+			output_transcript_queue.put((index, result_here, contig_lengths))
 	input_ids = queue.Queue(len(sample_info))
 	output_transcripts = queue.Queue(len(sample_info))
+	output_contig_lengths = queue.Queue(len(sample_info))
 	for i in range(0, len(sample_info)):
 		input_ids.put(i)
 	for i in range(0, num_threads):
@@ -66,15 +68,20 @@ def add_multiple_sample_proteins_to_database(database_file, sample_info, num_thr
 	for i in range(0, num_threads):
 		threads[i].join()
 	all_processed_transcripts = []
+	all_sample_contig_lens = []
 	for i in range(0, len(sample_info)):
 		all_processed_transcripts.append(None)
+		all_sample_contig_lens.append(None)
 	for i in range(0, len(sample_info)):
-		index, processed_transcripts = output_transcripts.get()
+		index, processed_transcripts, sample_contig_lens = output_transcripts.get()
 		assert index < len(all_processed_transcripts)
 		assert all_processed_transcripts[index] is None
 		all_processed_transcripts[index] = processed_transcripts
+		assert all_sample_contig_lens[index] is None
+		all_sample_contig_lens[index] = sample_contig_lens
 	for i in range(0, len(sample_info)):
 		assert all_processed_transcripts[i] is not None
+		assert all_sample_contig_lens[i] is not None
 	print(f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	threads = []
 	input_ids = queue.Queue(len(sample_info))
@@ -174,7 +181,7 @@ def add_multiple_sample_proteins_to_database(database_file, sample_info, num_thr
 
 def add_sample_proteins_to_database(database_file, sample_annotation, sample_fasta, sample_name, sample_haplotype):
 	"""
-	Adds proteins of a sample to the database. Assumes that liftoff has already been ran and sample annotation is in subfolder sample_annotation
+	Adds proteins of a sample to the database. Assumes that liftoff has already been ran
 
 	Args:
 		database_file: Base folder
@@ -183,80 +190,7 @@ def add_sample_proteins_to_database(database_file, sample_annotation, sample_fas
 		sample_name: Name of new sample
 		sample_haplotype: Haplotype of new sample
 	"""
-
-	print(f"step 1 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-	sample_transcripts = TranscriptExtractor.process_sample_transcripts(sample_fasta, sample_annotation)
-
-	print(f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-	sample_contig_lens = {}
-	for name, sequence in SequenceReader.stream_sequences(sample_fasta):
-		sample_contig_lens[name] = len(sequence)
-
-	print(f"step 3 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-	(gene_locations, transcript_locations) = Gff3Parser.parse_gene_transcript_locations(sample_annotation)
-
-	print(f"step 4 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-	processed_transcripts = []
-	for transcript_id, sequence, extra_copy in sample_transcripts:
-		name = transcript_id
-		if extra_copy != 0:
-			name = "_".join(name.split("_")[:-1])
-		processed_transcripts.append((name, sequence, transcript_locations[transcript_id]))
-
-	transcript_id_map = {}
-	allele_name_map = {}
-	sample_contig_db_ids = {}
-	novel_alleles = set()
-	with sqlite3.connect(str(database_file)) as connection:
-		cursor = connection.cursor()
-		cursor.arraysize = 10000
-		print(f"step 5 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		sample_id = cursor.execute("SELECT Id FROM Sample WHERE Name=?", (sample_name,)).fetchone()
-		if sample_id is None:
-			cursor.execute("INSERT INTO Sample (Name) VALUES (?)", (sample_name,))
-			sample_id = cursor.execute("SELECT Id FROM Sample WHERE Name=?", (sample_name,)).fetchone()
-			assert sample_id is not None
-		sample_id = sample_id[0]
-		print(f"step 6 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		cursor.execute("INSERT INTO Haplotype (SampleId, Haplotype) VALUES (?, ?)", (sample_id, sample_haplotype))
-		print(f"step 7 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		haplotype_id = cursor.execute("SELECT Id FROM Haplotype WHERE SampleId=? AND Haplotype=?", (sample_id, sample_haplotype)).fetchone()
-		assert haplotype_id is not None
-		haplotype_id = haplotype_id[0]
-		print(f"step 8 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		for name, length in sample_contig_lens.items():
-			cursor.execute("INSERT INTO SampleContig (HaplotypeId, Name, Length) VALUES (?, ?, ?)", (haplotype_id, name, length))
-		print(f"step 9 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		for db_id, name in cursor.execute("SELECT Id, Name FROM SampleContig WHERE HaplotypeId=?", (haplotype_id,)):
-			sample_contig_db_ids[name] = db_id
-		print(f"step 10 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		for db_id, transcript_id in cursor.execute("SELECT Id, Name FROM Transcript").fetchall():
-			transcript_id_map[transcript_id] = db_id
-		print(f"step 11 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		for allele_id, transcript_id, transcript_sequence in cursor.execute("SELECT Id, TranscriptId, Sequence FROM Allele").fetchall():
-			allele_name_map[(transcript_id, transcript_sequence)] = allele_id
-		print(f"step 12 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		for (transcript_id, sequence, location) in processed_transcripts:
-			transcript_db_id = transcript_id_map[transcript_id]
-			if (transcript_db_id, sequence) not in allele_name_map: novel_alleles.add((transcript_db_id, sequence))
-		print(f"step 13 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		if len(novel_alleles) >= 1:
-			print(f"step 14 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-			cursor.executemany("INSERT INTO Allele (TranscriptId, Sequence) VALUES (?, ?)", novel_alleles)
-		print(f"step 14.5 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		if len(novel_alleles) >= 1:
-			for allele_id, transcript_id, transcript_sequence in cursor.execute("SELECT Allele.Id, Transcript.Id, Allele.Sequence FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id").fetchall():
-				allele_name_map[(transcript_id, transcript_sequence)] = allele_id
-		print(f"step 15 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		insert_lines = []
-		for transcript_id, sequence, location in processed_transcripts:
-			insert_lines.append((haplotype_id, allele_name_map[(transcript_id_map[transcript_id], sequence)], sample_contig_db_ids[location[0]], location[1], location[2], location[3]))
-		print(f"step 16 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		cursor.executemany("INSERT INTO SampleProtein (HaplotypeId, AlleleId, SampleContigId, SampleLocationStrand, SampleLocationStart, SampleLocationEnd) VALUES (?, ?, ?, ?, ?, ?)", insert_lines)
-		print(f"step 17 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		connection.commit()
-		print(f"step 18 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-	print(f"step 19 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	add_multiple_sample_proteins_to_database(database_file, [(sample_name, sample_haplotype, sample_fasta, sample_annotation)], 1)
 
 def handle_one_new_sample_liftoff_and_transcripts(database_folder, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path, agc_path):
 	"""
@@ -381,7 +315,7 @@ def handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_
 				sample_info_with_annotations.append((sample_name, sample_haplotype, tmp_folder / (sample_name + "_" + sample_haplotype + ".fa"), sample_annotation_file))
 		print(f"{datetime.datetime.now().astimezone()}: Adding sample sequences to temporary agc file", file=sys.stderr)
 		temp_agc_path = add_samples_to_agc(database_folder, tmp_base_folder, sample_info_with_annotations, num_threads, agc_path)
-		print(f"{datetime.datetime.now()}.astimezone(): Adding sample proteins to sql database", file=sys.stderr)
+		print(f"{datetime.datetime.now().astimezone()}: Adding sample proteins to sql database", file=sys.stderr)
 		add_multiple_sample_proteins_to_database(database_folder / "sample_info.db", sample_info_with_annotations, num_threads)
 		print(f"{datetime.datetime.now().astimezone()}: Copying temporary agc and annotation files to database folder", file=sys.stderr)
 		copy_annotations(database_folder, sample_info_with_annotations)

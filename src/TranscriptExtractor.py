@@ -101,7 +101,7 @@ def get_transcript_dna_sequence(transcript, contig_sequence):
 
 	return transcript_seq
 
-def process_sample_transcripts(input_file, lifted_gff):
+def process_sample_transcripts_and_contigs(input_file, lifted_gff):
 	"""
 	Process a single sample to extract transcript amino acid sequences after liftoff.
 
@@ -110,31 +110,43 @@ def process_sample_transcripts(input_file, lifted_gff):
 		lifted_gff: Path to the sample lifted gff3 file.
 
 	Returns:
-		List[Tuple[transcript_id, transcript_aminoacid_sequence, extra_copy_number]]
+		Tuple of (sample_transcripts, gene_locations, transcript_locations, contig_lengths)
+		Sample_transcripts is List[Tuple[transcript_id, transcript_aminoacid_sequence, extra_copy_number]]
+		Gene_locations is dict of (id -> (contig, strand, start, end))
+		Transcript_locations is dict of (id -> (contig, strand, start, end))
+		Contig_lengths is dict of (contig -> length)
 	"""
 	import os
 	import sys
 
+	if not os.path.exists(input_file):
+		raise RuntimeError(f"Sample sequence file not found")
 	if not os.path.exists(lifted_gff):
 		raise RuntimeError(f"Lifted annotation GFF not found")
 
-	print(f"{datetime.datetime.now().astimezone()}: Reading sequences of sample.", file=sys.stderr)
-	contig_seqs = {name: seq for name, seq in SequenceReader.stream_sequences(input_file)}
-
 	print(f"{datetime.datetime.now().astimezone()}: Reading annotation of sample.", file=sys.stderr)
-	transcripts = Gff3Parser.parse_gff3_transcripts_with_exons(lifted_gff)
+	(transcripts, gene_locations) = Gff3Parser.parse_gff3_transcripts_with_exons(lifted_gff)
+	transcript_locations = {}
+	for transcript in transcripts:
+		transcript_locations[transcript["transcript_id"]] = (transcript["contig"], transcript["strand"], transcript["start"], transcript["end"])
 
-	print(f"{datetime.datetime.now().astimezone()}: Parsing transcripts.", file=sys.stderr)
+	transcripts_per_contig = {}
+	for transcript in transcripts:
+		contig = transcript["contig"]
+		if contig not in transcripts_per_contig: transcripts_per_contig[contig] = []
+		transcripts_per_contig[contig].append(transcript)
+
+	result_contig_lengths = {}
 	transcripts_data = []
-	for tx in transcripts:
-		if not tx['exons']:
-			continue
-		contig_name = tx['exons'][0]['contig']
-		if contig_name not in contig_seqs:
-			raise RuntimeError("Contig {contig_name} not found")
-		contig_seq = contig_seqs[contig_name]
-		seq = get_transcript_dna_sequence(tx, contig_seq)
-		seq = translate_dna(seq)
-		transcripts_data.append((tx['transcript_id'], seq, tx.get('extra_copy_number', 0)))
+	print(f"{datetime.datetime.now().astimezone()}: Reading sequences of sample.", file=sys.stderr)
+	for name, contig_seq in SequenceReader.stream_sequences(input_file):
+		result_contig_lengths[name] = len(contig_seq)
+		if name not in transcripts_per_contig: continue
+		for tx in transcripts_per_contig[name]:
+			if not tx['exons']:
+				continue
+			seq = get_transcript_dna_sequence(tx, contig_seq)
+			seq = translate_dna(seq)
+			transcripts_data.append((tx['transcript_id'], seq, tx.get('extra_copy_number', 0)))
 
-	return transcripts_data
+	return (transcripts_data, gene_locations, transcript_locations, result_contig_lengths)

@@ -72,22 +72,30 @@ def parse_gene_transcript_locations(gff3_path):
 def parse_gff3_transcripts_with_exons(gff3_path):
 	"""
 	Parses a GFF3 file and returns a list of transcripts.
-	Each transcript is a dict with keys:
-	  - 'transcript_id'
-	  - 'protein_coding' (bool)
-	  - 'exons' (list of exon dicts ordered by exon_number)
-	  - 'extra_copy_number'
-	  
-	Each exon dict contains:
-	  - 'contig', 'start', 'end', 'strand', 'exon_number'
+
+	Args:
+		gff3_path: Path to gff3(.gz) file
 
 	Returns:
-	  List of transcript dicts.
+		(transcript_info, gene_info)
+		Transcript_info is a dict with keys:
+		  - 'transcript_id'
+		  - contig
+		  - start
+		  - end
+		  - 'protein_coding' (bool)
+		  - 'exons' (list of exon dicts ordered by exon_number)
+		  - 'extra_copy_number'
+		Each exon dict contains:
+		  - 'contig', 'start', 'end', 'strand', 'exon_number'
+		Gene_info is a dict of (gene -> (contig, start, end))
 	"""
 
 	transcript_biotype = {}   # transcript_id -> biotype string
 	transcript_exons = {}     # transcript_id -> list of exon dicts (with exon_number or None)
 	transcript_extra_copy_number = {}
+	transcript_locations = {}
+	gene_locations = {}
 
 	with Util.open_maybe_gzipped(gff3_path) as f:
 		for line in f:
@@ -107,6 +115,12 @@ def parse_gff3_transcripts_with_exons(gff3_path):
 				if tid:
 					transcript_biotype[tid] = biotype.lower()
 					transcript_extra_copy_number[tid] = int(extra_copy_number)
+			if feature_type == "transcript":
+				tid = attrs.get('ID') or attrs.get('transcript_id')
+				transcript_locations[tid] = (seqid, strand, int(start), int(end))
+			if feature_type == "gene":
+				gene_id = attrs.get('ID')
+				gene_locations[gene_id] = (seqid, strand, int(start), int(end))
 
 			if feature_type == 'CDS':
 				parent = attrs.get('Parent')
@@ -142,12 +156,20 @@ def parse_gff3_transcripts_with_exons(gff3_path):
 
 		protein_coding = (transcript_biotype.get(tid, '') == 'protein_coding')
 		extra_copy_number = transcript_extra_copy_number[tid]
+		contig = transcript_locations[tid][0]
+		strand = transcript_locations[tid][1]
+		start = transcript_locations[tid][2]
+		end = transcript_locations[tid][3]
 
 		transcripts.append({
 			'transcript_id': tid,
+			'contig': contig,
+			'strand': strand,
+			'start': start,
+			'end': end,
 			'protein_coding': protein_coding,
 			'extra_copy_number': extra_copy_number,
 			'exons': exons
 		})
 
-	return transcripts
+	return (transcripts, gene_locations)
