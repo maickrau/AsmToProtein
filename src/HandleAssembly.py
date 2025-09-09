@@ -83,36 +83,6 @@ def add_multiple_sample_proteins_to_database(database_file, sample_info, num_thr
 		assert all_processed_transcripts[i] is not None
 		assert all_sample_contig_lens[i] is not None
 	print(f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-	threads = []
-	input_ids = queue.Queue(len(sample_info))
-	def get_contig_lengths(sample_info, input_id_queue, output_contigs_queue):
-		while True:
-			if input_id_queue.empty(): return
-			index = input_id_queue.get()
-			sample_name, sample_haplotype, sample_fasta, sample_annotation = sample_info[index]
-			result = {}
-			for name, sequence in SequenceReader.stream_sequences(sample_fasta):
-				result[name] = len(sequence)
-			output_contigs_queue.put((index, result))
-	for i in range(0, len(sample_info)):
-		input_ids.put(i)
-	output_contig_lengths = queue.Queue(len(sample_info))
-	for i in range(0, num_threads):
-		threads.append(threading.Thread(target=get_contig_lengths, args=(sample_info, input_ids, output_contig_lengths)))
-	for i in range(0, num_threads):
-		threads[i].start()
-	for i in range(0, num_threads):
-		threads[i].join()
-	all_sample_contig_lens = []
-	for i in range(0, len(sample_info)):
-		all_sample_contig_lens.append(None)
-	for i in range(0, len(sample_info)):
-		index, sample_contig_lens = output_contig_lengths.get()
-		assert index < len(all_sample_contig_lens)
-		assert all_sample_contig_lens[index] is None
-		all_sample_contig_lens[index] = sample_contig_lens
-	for i in range(0, len(sample_info)):
-		assert all_sample_contig_lens[i] is not None
 	transcript_id_map = {}
 	allele_name_map = {}
 	sample_contig_db_ids = []
