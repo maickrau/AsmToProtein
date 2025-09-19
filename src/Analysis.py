@@ -3,17 +3,15 @@
 import scipy
 import DatabaseOperations
 
-def chi_squared_test_by_table(database_file, table, transcript):
+def get_groups_from_tsv(table):
 	"""
-	Performs chi-squared test between groups and allele sets.
+	Reads a tsv file of sample groups and returns assignments of samples to groups
 
 	Args:
-		database_file: Path to sql database file. Should be in pathlib format
-		table: TSV file of samples and groups
-		transcript: Filter to a single transcript if given. If none, output all transcripts.
+		table: Path to TSV file of samples and groups
 
 	Returns:
-		Total sample size, group sample sizes and P-values per transcript. Format is (total_sample_size, {group_name -> group_sample_size}, [(transcript_name, P-value)])
+		Dict of (sample -> group)
 	"""
 	sample_in_group = {}
 	row_number = 0
@@ -31,6 +29,21 @@ def chi_squared_test_by_table(database_file, table, transcript):
 			if parts[0] in sample_in_group:
 				raise RuntimeError(f"Samples should only belong to a single group. Sample {parts[0]} belongs to groups \"{sample_in_group[parts[0]]}\" and \"{parts[1]}\"")
 			sample_in_group[parts[0]] = parts[1]
+	return sample_in_group
+
+def chi_squared_test_by_table(database_file, table, transcript):
+	"""
+	Performs chi-squared test between groups and allele sets.
+
+	Args:
+		database_file: Path to sql database file. Should be in pathlib format
+		table: TSV file of samples and groups
+		transcript: Filter to a single transcript if given. If none, output all transcripts.
+
+	Returns:
+		Total sample size, group sample sizes and P-values per transcript. Format is (total_sample_size, {group_name -> group_sample_size}, [(transcript_name, P-value)])
+	"""
+	sample_in_group = get_groups_from_tsv(table)
 	temp_group_name_mapping = DatabaseOperations.add_temporary_groups(database_file, sample_in_group)
 	temp_group_names = []
 	result = None
@@ -86,6 +99,37 @@ def chi_squared_test(database_file, groups, transcript):
 		p_values.append((transcript, test_result.pvalue))
 	return (total_sample_size, group_counts, p_values)
 
+def get_contingency_tables_by_table(database_file, table, transcript):
+	"""
+	Get contingency tables of group vs allele sets with groups given in a tsv file.
+
+	Args:
+		database_file: Path to sql database file. Should be in pathlib format
+		table: Path to tsv file which describes groups
+		transcript: Filter to a single transcript if given. If none, output all transcripts.
+
+	Returns:
+		Transcripts, their allele sets, and counts per group. Format is [(transcript, [(alleleset, [count_in_group_n])])]
+	"""
+	sample_in_group = get_groups_from_tsv(table)
+	temp_group_name_mapping = DatabaseOperations.add_temporary_groups(database_file, sample_in_group)
+	temp_group_names = []
+	result = None
+	for group in temp_group_name_mapping:
+		temp_group_names.append(group)
+	try:
+		if transcript:
+			transcript_result = DatabaseOperations.get_alleleset_contingency_table_by_group(database_file, transcript, temp_group_names)
+			info_per_transcript = [(transcript, transcript_result)]
+		else:
+			info_per_transcript = DatabaseOperations.get_all_transcripts_alleleset_contingency_table_by_group(database_file, temp_group_names)
+	finally:
+		DatabaseOperations.remove_temporary_groups(database_file, temp_group_names)
+	renamed_groups = []
+	for temp_name in temp_group_names:
+		renamed_groups.append(temp_group_name_mapping[temp_name])
+	return renamed_groups, info_per_transcript
+
 def get_contingency_tables(database_file, groups, transcript):
 	"""
 	Get contingency tables of group vs allele sets.
@@ -103,4 +147,4 @@ def get_contingency_tables(database_file, groups, transcript):
 		info_per_transcript = [(transcript, transcript_result)]
 	else:
 		info_per_transcript = DatabaseOperations.get_all_transcripts_alleleset_contingency_table_by_group(database_file, groups)
-	return info_per_transcript
+	return groups, info_per_transcript

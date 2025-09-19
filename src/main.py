@@ -100,26 +100,34 @@ def update_names(args):
 	DatabaseOperations.rename_alleles_by_coverage(pathlib.Path(args.database) / "sample_info.db")
 
 def contingency_table(args):
-	groups = list(args.group)
-	groups.sort()
+	groups = []
+	if args.group:
+		groups = list(args.group)
+		groups.sort()
 	print("Input parameters:", file=sys.stderr)
 	print(f"-db {args.database}", file=sys.stderr)
 	print(f"-o {args.output}", file=sys.stderr)
 	print(f"--transcript {args.transcript}", file=sys.stderr)
 	print(f"--group {", ".join(groups)}", file=sys.stderr)
+	print(f"--table {args.table}", file=sys.stderr)
 	print(f"--include-gene-info {args.include_gene_info}", file=sys.stderr)
-	if len(groups) < 2:
-		print("At least two groups are required", file=sys.stderr)
+	if len(groups) < 2 and args.table is None:
+		print("Either sample table (--sample) or at least two groups (--group) are required", file=sys.stderr)
 		print("Groups should all be listed at once (eg. \"--group group1 group2 group3\", not \"--group group1 --group group2 --group group3\")", file=sys.stderr)
 		exit(1)
-	if args.include_gene_info:
-		transcript_gene_info = DatabaseOperations.get_transcript_gene_chromosome_info(pathlib.Path(args.database) / "sample_info.db")
-	info_per_transcript = Analysis.get_contingency_tables(pathlib.Path(args.database) / "sample_info.db", groups, args.transcript)
+	if args.table is not None and len(groups) >= 2:
+		print("Cannot use both --sample and --group parameters", file=sys.stderr)
+		print("Select only either sample table (--sample) or two or more groups (--group)", file=sys.stderr)
+		exit(1)
+	if len(groups) >= 2:
+		headergroups, info_per_transcript = Analysis.get_contingency_tables(pathlib.Path(args.database) / "sample_info.db", groups, args.transcript)
+	else:
+		headergroups, info_per_transcript = Analysis.get_contingency_tables_by_table(pathlib.Path(args.database) / "sample_info.db", args.table, args.transcript)
 	with open_file_or_stdout(args.output) as f:
 		if args.include_gene_info:
-			print(f"Chromosome\tGene\tTranscript\tAlleleset\t{"\t".join(groups)}", file=f)
+			print(f"Chromosome\tGene\tTranscript\tAlleleset\t{"\t".join(headergroups)}", file=f)
 		else:
-			print(f"Transcript\tAlleleset\t{"\t".join(groups)}", file=f)
+			print(f"Transcript\tAlleleset\t{"\t".join(headergroups)}", file=f)
 		for transcript, result in info_per_transcript:
 			for line in result:
 				if args.include_gene_info:
@@ -316,7 +324,8 @@ if __name__ == "__main__":
 	contingency_table_parser = subparsers.add_parser("contingencytable", description="Create contingency tables")
 	contingency_table_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	contingency_table_parser.add_argument('--transcript', help='Name of transcript. If no transcript is given, all transcripts will be used.')
-	contingency_table_parser.add_argument('--group', nargs='+', required=True, help='Names of groups (at least two required, multiple possible)')
+	contingency_table_parser.add_argument('--group', nargs='+', help='Names of groups (at least two required, multiple possible)')
+	contingency_table_parser.add_argument('--table', help='Table with samples per group to include')
 	contingency_table_parser.add_argument('-o', '--output', default="-", help='Output file (- for stdout) (default -)')
 	contingency_table_parser.add_argument('--include-gene-info', action="store_true", help='Include information about gene in the output table.')
 	contingency_table_parser.set_defaults(func=contingency_table)
