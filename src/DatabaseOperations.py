@@ -92,6 +92,7 @@ def add_temporary_groups(database_path, groups):
 		for sample, db_id in cursor.execute("SELECT Name, Id FROM Sample").fetchall():
 			sample_db_id[sample] = db_id
 		for sample, group in groups.items():
+			if sample not in sample_db_id: raise RuntimeError(f"Sample {sample} not found. Note that sample names are case sensitive")
 			additions.append((sample_db_id[sample], name_mapping[group]))
 		cursor.executemany("INSERT INTO SampleGroup (SampleId, GroupName) VALUES (?, ?)", additions)
 	result = {}

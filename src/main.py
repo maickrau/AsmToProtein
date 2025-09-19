@@ -123,6 +123,8 @@ def contingency_table(args):
 		headergroups, info_per_transcript = Analysis.get_contingency_tables(pathlib.Path(args.database) / "sample_info.db", groups, args.transcript)
 	else:
 		headergroups, info_per_transcript = Analysis.get_contingency_tables_by_table(pathlib.Path(args.database) / "sample_info.db", args.table, args.transcript)
+	if args.include_gene_info:
+		transcript_gene_info = DatabaseOperations.get_transcript_gene_chromosome_info(pathlib.Path(args.database) / "sample_info.db")
 	with open_file_or_stdout(args.output) as f:
 		if args.include_gene_info:
 			print(f"Chromosome\tGene\tTranscript\tAlleleset\t{"\t".join(headergroups)}", file=f)
