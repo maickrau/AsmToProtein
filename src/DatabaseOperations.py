@@ -176,23 +176,65 @@ def get_all_transcripts(database_path):
 		transcripts = list(x[0] for x in cursor.execute("SELECT Name FROM Transcript ORDER BY Name", ()).fetchall())
 		return transcripts
 
-def get_allele_sequences_per_transcript(database_path):
+def add_alleles_to_fasta(file_path, novel_alleles):
+	"""
+	Adds allele sequences to allele fasta
+
+	Args:
+		file_path: Path to allele fasta
+		novel_alleles: Set of novel alleles in format (transcript_id, allele_sequence)
+
+	Returns:
+		List of inserted alleles in format [(transcript_id, sequence_id)]
+	"""
+	next_free_sequence_id = 0
+	for name, _ in SequenceReader.stream_sequences(file_path):
+		allele_id = int(name)
+		next_free_sequence_id = max(next_free_sequence_id, allele_id)
+	next_free_sequence_id += 1
+	result = []
+	with open(file_path, "a") as f:
+		for transcript_id, sequence in novel_alleles:
+			f.write(">" + str(next_free_sequence_id) + "\n")
+			f.write(sequence + "\n")
+			result.append((transcript_id, next_free_sequence_id))
+			next_free_sequence_id += 1
+	return result
+
+def get_allele_sequences_from_file(file_path):
+	"""
+	Gets all allele sequences
+
+	Args:
+		file_path: Path to allele fasta
+
+	Returns:
+		Dictionary of id -> sequence
+	"""
+	result = {}
+	for name, sequence in SequenceReader.stream_sequences(file_path):
+		result[int(name)] = sequence
+	return result
+
+def get_allele_sequences_per_transcript(base_path):
 	"""
 	Gets all allele sequences stratified by transcript
 
 	Args:
-		database_path: Path to sql database file. Type should be pathlib.Path
+		base_path: Path to database folder. Type should be pathlib.Path
 
 	Returns:
 		Dictionary of transcript -> [list of (allele_sequence, frequency)]
 	"""
 
-	with sqlite3.connect(str(database_path)) as connection:
+	allele_sequences = get_allele_sequences_from_file(str(base_path / "alleles.fa"))
+
+	with sqlite3.connect(str(base_path / "sample_info.db")) as connection:
 		cursor = connection.cursor()
 		result = {}
-		for transcript, sequence, count in cursor.execute("SELECT Transcript.Name, Allele.Sequence, COUNT(*) FROM SampleProtein INNER JOIN Allele ON SampleProtein.AlleleId=Allele.Id INNER JOIN Transcript ON Allele.TranscriptId=Transcript.Id GROUP BY Transcript.Name, Allele.Sequence"):
+		for transcript, sequenceID, count in cursor.execute("SELECT Transcript.Name, Allele.SequenceId, COUNT(*) FROM SampleProtein INNER JOIN Allele ON SampleProtein.AlleleId=Allele.Id INNER JOIN Transcript ON Allele.TranscriptId=Transcript.Id GROUP BY Transcript.Name, Allele.SequenceID"):
 			if transcript not in result: result[transcript] = []
-			result[transcript].append((sequence, count))
+			result[transcript].append((allele_sequences[sequenceID], count))
 		return result
 
 def add_sample_to_group(database_path, sample_name, sample_group):
@@ -252,41 +294,47 @@ def get_transcript_gene_chromosome_info(database_path):
 			result[transcript_name] = (gene_common_name, ref_chrom)
 		return result
 
-def get_alleles_of_transcript(database_path, transcript):
+def get_alleles_of_transcript(base_path, transcript):
 	"""
 	Gets all alleles of a single transcript
 
 	Args:
-		database_path: Path to sql database file. Type should be pathlib.Path
+		base_path: Path to database folder. Type should be pathlib.Path
 		transcript: Name of transcript
 
 	Returns:
 		List of [(allele_name, allele_sequence, allele_copy_count)]
 	"""
-	with sqlite3.connect(str(database_path)) as connection:
+	
+	allele_sequences = get_allele_sequences_from_file(str(base_path / "alleles.fa"))
+
+	with sqlite3.connect(str(base_path / "sample_info.db")) as connection:
 		cursor = connection.cursor()
 		result = []
-		for name, sequence, copycount in cursor.execute("SELECT Allele.Name, Allele.Sequence, COUNT(*) FROM Allele INNER JOIN Transcript ON Allele.TranscriptId=Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId=Allele.Id WHERE Transcript.Name=? GROUP BY Allele.Name, Allele.Sequence", (transcript,)):
-			result.append((name, sequence, copycount))
+		for name, sequenceID, copycount in cursor.execute("SELECT Allele.Name, Allele.SequenceID, COUNT(*) FROM Allele INNER JOIN Transcript ON Allele.TranscriptId=Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId=Allele.Id WHERE Transcript.Name=? GROUP BY Allele.Name, Allele.SequenceID", (transcript,)):
+			result.append((name, allele_sequences[sequenceID], copycount))
 		result.sort()
 		return result
 
-def get_alleles_of_all_transcripts(database_path):
+def get_alleles_of_all_transcripts(base_path):
 	"""
 	Gets all alleles of all transcripts
 
 	Args:
-		database_path: Path to sql database file. Type should be pathlib.Path
+		base_path: Path to database folder. Type should be pathlib.Path
 
 	Returns:
 		List of [(transcript, list of [(allele_name, allele_sequence, allele_copy_count)])]
 	"""
-	with sqlite3.connect(str(database_path)) as connection:
+
+	allele_sequences = get_allele_sequences_from_file(str(base_path / "alleles.fa"))
+
+	with sqlite3.connect(str(base_path / "sample_info.db")) as connection:
 		cursor = connection.cursor()
 		result_per_transcript = {}
-		for transcript, name, sequence, copycount in cursor.execute("SELECT Transcript.Name, Allele.Name, Allele.Sequence, COUNT(*) FROM Allele INNER JOIN Transcript ON Allele.TranscriptId=Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId=Allele.Id GROUP BY Allele.Name, Allele.Sequence, Transcript.Name", ()):
+		for transcript, name, sequenceID, copycount in cursor.execute("SELECT Transcript.Name, Allele.Name, Allele.SequenceID, COUNT(*) FROM Allele INNER JOIN Transcript ON Allele.TranscriptId=Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId=Allele.Id GROUP BY Allele.Name, Allele.SequenceID, Transcript.Name", ()):
 			if transcript not in result_per_transcript: result_per_transcript[transcript] = []
-			result_per_transcript[transcript].append((name, sequence, copycount))
+			result_per_transcript[transcript].append((name, allele_sequences[sequenceID], copycount))
 		result = []
 		for transcript, alleles in result_per_transcript.items():
 			alleles.sort()
@@ -652,7 +700,7 @@ def rename_alleles_by_coverage(database_path):
 		print(f"{datetime.datetime.now().astimezone()}: Get reference alleles", file=sys.stderr)
 		for x in cursor.execute("EXPLAIN QUERY PLAN SELECT TranscriptId, Allele.Id FROM Allele INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId = Sample.Id WHERE Sample.Name='reference'").fetchall():
 			print(x, file=sys.stderr)
-		for transcript, allele in cursor.execute("SELECT TranscriptId, Allele.Id FROM Allele INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId = Sample.Id WHERE Sample.Name='reference'").fetchall():
+		for transcript, allele in cursor.execute("SELECT DISTINCT TranscriptId, Allele.Id FROM Allele INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId = Sample.Id WHERE Sample.Name='reference'").fetchall():
 			if transcript not in reference_allele:
 				reference_allele[transcript] = allele
 			else:
@@ -690,7 +738,7 @@ def initialize_sqlite_db_schema(database_path):
 		CREATE TABLE SampleContig (Id INTEGER PRIMARY KEY NOT NULL, HaplotypeId INTEGER NOT NULL, Length INTEGER NOT NULL, Name TEXT NOT NULL, FOREIGN KEY (HaplotypeId) REFERENCES Haplotype(Id));
 		CREATE TABLE Gene (Id INTEGER PRIMARY KEY NOT NULL, Name TEXT NOT NULL, CommonName TEXT NOT NULL, ReferenceChromosome TEXT NOT NULL, ReferenceLocationStrand TEXT NOT NULL, ReferenceLocationStart INTEGER NOT NULL, ReferenceLocationEnd INTEGER NOT NULL);
 		CREATE TABLE Transcript (Id INTEGER PRIMARY KEY NOT NULL, Name TEXT NOT NULL, GeneId INTEGER NOT NULL, ReferenceChromosome TEXT NOT NULL, ReferenceLocationStrand TEXT NOT NULL, ReferenceLocationStart INTEGER NOT NULL, ReferenceLocationEnd INTEGER NOT NULL, FOREIGN KEY (GeneId) REFERENCES Gene(Id));
-		CREATE TABLE Allele (Id INTEGER PRIMARY KEY NOT NULL, TranscriptId INTEGER NOT NULL, Sequence TEXT NOT NULL, Name TEXT, FOREIGN KEY (TranscriptId) REFERENCES Transcript(Id));
+		CREATE TABLE Allele (Id INTEGER PRIMARY KEY NOT NULL, TranscriptId INTEGER NOT NULL, SequenceID INTEGER NOT NULL, Name TEXT, FOREIGN KEY (TranscriptId) REFERENCES Transcript(Id));
 		CREATE TABLE SampleProtein (Id INTEGER PRIMARY KEY NOT NULL, HaplotypeId INTEGER NOT NULL, AlleleId INTEGER NOT NULL, SampleContigId INTEGER NOT NULL, SampleLocationStrand TEXT NOT NULL, SampleLocationStart INTEGER NOT NULL, SampleLocationEnd INTEGER NOT NULL, FOREIGN KEY (HaplotypeId) REFERENCES Haplotype(Id), FOREIGN KEY (AlleleId) REFERENCES Allele(Id), FOREIGN KEY (SampleContigId) REFERENCES SampleContig(Id));
 		CREATE TABLE SampleAnnotation (Id INTEGER PRIMARY KEY NOT NULL, SampleId INTEGER NOT NULL, Key TEXT NOT NULL, Value TEXT, FOREIGN KEY (SampleId) REFERENCES Sample(Id));
 		CREATE TABLE GeneAnnotation (Id INTEGER PRIMARY KEY NOT NULL, GeneId INTEGER NOT NULL, Key TEXT NOT NULL, Value TEXT, FOREIGN KEY (GeneId) REFERENCES Gene(Id));
@@ -698,7 +746,7 @@ def initialize_sqlite_db_schema(database_path):
 		CREATE TABLE AlleleAnnotation (Id INTEGER PRIMARY KEY NOT NULL, AlleleId INTEGER NOT NULL, Key TEXT NOT NULL, Value TEXT, FOREIGN KEY (AlleleId) REFERENCES Allele(Id));
 		CREATE INDEX SampleNameIndex ON Sample(Name);
 		CREATE INDEX GeneNameIndex ON Gene(Name);
-		CREATE INDEX AlleleIndex ON Allele(TranscriptId, Sequence);
+		CREATE INDEX AlleleIndex ON Allele(TranscriptId, SequenceID);
 		CREATE INDEX SampleProteinAlleleId ON SampleProtein(AlleleId);
 		CREATE INDEX SampleProteinHaplotypeId ON SampleProtein(HaplotypeId);
 		CREATE INDEX HaplotypeSampleIdIndex ON Haplotype(SampleId);
@@ -771,6 +819,10 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 		liftoff_info = subprocess.run([liftoff_path, "--version"], capture_output=True, text=True)
 		print(f"Liftoff version: {str(liftoff_info.stdout)}", file=f)
 
+	with open(folder / "alleles.fa", "w") as f:
+		# just touch the allele file to create it
+		pass
+
 	tmp_folder = folder / "tmp"
 	sample_annotation_folder = folder / "sample_annotations"
 	os.makedirs(tmp_folder)
@@ -812,4 +864,4 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 
 	shutil.rmtree(tmp_folder)
 
-	HandleAssembly.add_sample_proteins_to_database(folder / "sample_info.db", sample_annotation_folder / "reference.gff3.gz", ref_fasta, "reference", "reference")
+	HandleAssembly.add_sample_proteins_to_database(folder, sample_annotation_folder / "reference.gff3.gz", ref_fasta, "reference", "reference")

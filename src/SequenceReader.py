@@ -13,6 +13,7 @@ def stream_sequences(filepath):
 
 	with Util.open_maybe_gzipped(filepath) as f:
 		first_line = f.readline()
+		if not first_line: return # empty file
 		f.seek(0)  # rewind to start
 
 		if first_line.startswith('>'):

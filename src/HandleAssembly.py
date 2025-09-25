@@ -14,6 +14,7 @@ import Gff3Parser
 import TranscriptExtractor
 import SequenceReader
 import Util
+import DatabaseOperations
 
 def prepare_fasta(input_path, output_path):
 	"""
@@ -29,12 +30,12 @@ def prepare_fasta(input_path, output_path):
 			print(">" + name, file=f)
 			print(sequence, file=f)
 
-def add_multiple_sample_proteins_to_database(database_file, sample_info, num_threads):
+def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threads):
 	"""
 	Adds proteins of a sample to the database. Assumes that liftoff has already been ran
 
 	Args:
-		database_file: Base folder
+		base_folder: Base folder
 		sample_info: List of tuples of (sample_name, sample_haplotype, sample_fasta_file_path, sample_annotation_file_path)
 		num_threads: Number of threads to use. Processing each sample uses one thread but multiple samples can be processed in parallel
 	"""
@@ -87,16 +88,17 @@ def add_multiple_sample_proteins_to_database(database_file, sample_info, num_thr
 	allele_name_map = {}
 	sample_contig_db_ids = []
 	all_haplotype_ids = []
+	allele_sequences = DatabaseOperations.get_allele_sequences_from_file(str(base_folder / "alleles.fa"))
 	novel_alleles = set()
-	with sqlite3.connect(str(database_file)) as connection:
+	with sqlite3.connect(str(base_folder / "sample_info.db")) as connection:
 		cursor = connection.cursor()
 		cursor.arraysize = 10000
 		print(f"step 3 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		for db_id, transcript_id in cursor.execute("SELECT Id, Name FROM Transcript").fetchall():
 			transcript_id_map[transcript_id] = db_id
 		print(f"step 4 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		for allele_id, transcript_id, transcript_sequence in cursor.execute("SELECT Id, TranscriptId, Sequence FROM Allele").fetchall():
-			allele_name_map[(transcript_id, transcript_sequence)] = allele_id
+		for allele_id, transcript_id, transcript_sequence_id in cursor.execute("SELECT Id, TranscriptId, SequenceId FROM Allele").fetchall():
+			allele_name_map[(transcript_id, allele_sequences[transcript_sequence_id])] = allele_id
 		print(f"step 5 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		for sampleindex in range(0, len(sample_info)):
 			sample_name = sample_info[sampleindex][0]
@@ -130,12 +132,14 @@ def add_multiple_sample_proteins_to_database(database_file, sample_info, num_thr
 				if (transcript_db_id, sequence) not in allele_name_map: novel_alleles.add((transcript_db_id, sequence))
 		print(f"step 12 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		if len(novel_alleles) >= 1:
+			inserted_alleles = DatabaseOperations.add_alleles_to_fasta(base_folder / "alleles.fa", novel_alleles)
 			print(f"step 13 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-			cursor.executemany("INSERT INTO Allele (TranscriptId, Sequence) VALUES (?, ?)", novel_alleles)
-		print(f"step 14 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		if len(novel_alleles) >= 1:
-			for allele_id, transcript_id, transcript_sequence in cursor.execute("SELECT Allele.Id, Transcript.Id, Allele.Sequence FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id").fetchall():
-				allele_name_map[(transcript_id, transcript_sequence)] = allele_id
+			cursor.executemany("INSERT INTO Allele (TranscriptId, SequenceId) VALUES (?, ?)", inserted_alleles)
+			print(f"step 13.5 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+			allele_sequences = DatabaseOperations.get_allele_sequences_from_file(str(base_folder / "alleles.fa"))
+			print(f"step 14 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+			for allele_id, transcript_id, transcript_sequence_id in cursor.execute("SELECT Allele.Id, Transcript.Id, Allele.SequenceId FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id").fetchall():
+				allele_name_map[(transcript_id, allele_sequences[transcript_sequence_id])] = allele_id
 		print(f"step 15 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		insert_lines = []
 		for sampleindex in range(0, len(sample_info)):
@@ -149,25 +153,25 @@ def add_multiple_sample_proteins_to_database(database_file, sample_info, num_thr
 		print(f"step 18 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	print(f"step 19 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 
-def add_sample_proteins_to_database(database_file, sample_annotation, sample_fasta, sample_name, sample_haplotype):
+def add_sample_proteins_to_database(base_folder, sample_annotation, sample_fasta, sample_name, sample_haplotype):
 	"""
 	Adds proteins of a sample to the database. Assumes that liftoff has already been ran
 
 	Args:
-		database_file: Base folder
+		base_folder: Base folder
 		sample_annotation: Path of sample gff3 annotation file
 		sample_fasta: Path of sample fasta file
 		sample_name: Name of new sample
 		sample_haplotype: Haplotype of new sample
 	"""
-	add_multiple_sample_proteins_to_database(database_file, [(sample_name, sample_haplotype, sample_fasta, sample_annotation)], 1)
+	add_multiple_sample_proteins_to_database(base_folder, [(sample_name, sample_haplotype, sample_fasta, sample_annotation)], 1)
 
-def handle_one_new_sample_liftoff_and_transcripts(database_folder, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path, agc_path):
+def handle_one_new_sample_liftoff_and_transcripts(base_folder, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path, agc_path):
 	"""
 	Handles one new sample. Adds the sample sequences to the agc database, runs liftoff and gets transcripts, and adds the transcripts to the sample annotation sql database. Creates a temp folder with all temp files which is deleted in the end.
 
 	Args:
-		database_folder: Folder where database files are located. Type should be pathlib.Path
+		base_folder: Folder where database files are located. Type should be pathlib.Path
 		sample_sequence: Sequence file of sample in fasta/fastq/gzip format
 		sample_name: Name of new sample
 		sample_haplotype: Haplotype of new sample
@@ -175,7 +179,7 @@ def handle_one_new_sample_liftoff_and_transcripts(database_folder, sample_sequen
 		agc_path: Path to agc executable
 	"""
 	sample_info = [(sample_name, sample_haplotype, sample_sequence, None)]
-	handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_info, num_threads, liftoff_path, agc_path)
+	handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info, num_threads, liftoff_path, agc_path)
 
 def run_liftoff(database_folder, input_sequence, output, num_threads, liftoff_path):
 	"""
@@ -250,23 +254,23 @@ def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_fold
 	print(f"Adding {len(sample_info)} new assemblies", file=sys.stderr)
 	handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_info, num_threads, liftoff_path, agc_path)
 
-def handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_info, num_threads, liftoff_path, agc_path):
+def handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info, num_threads, liftoff_path, agc_path):
 	"""
 	Handles multiple new samples. Adds the sample sequences to the agc database, runs liftoff if necessary and gets transcripts, and adds the transcripts to the sample annotation sql database. Creates a temp folder with all temp files which is deleted in the end.
 
 	Args:
-		database_folder: Folder where database files are located. Type should be pathlib.Path
+		base_folder: Folder where database files are located. Type should be pathlib.Path
 		sample_info: List of tuples of (sample_name, sample_haplotype, sample_sequence_file_path, sample_annotation_file_path)
 		liftoff_path: Path to liftoff executable
 		agc_path: Path to agc executable
 	"""
 	for sample_name, sample_haplotype, _, _ in sample_info:
-		sample_exists = check_if_sample_exists(database_folder, sample_name, sample_haplotype)
+		sample_exists = check_if_sample_exists(base_folder, sample_name, sample_haplotype)
 		if sample_exists:
 			raise RuntimeError(f"Sample already exists: name \"{sample_name}\" haplotype \"{sample_haplotype}\"")
 
 	tmp_prefix = Util.make_random_prefix()
-	tmp_base_folder = database_folder / ("tmp_" + tmp_prefix)
+	tmp_base_folder = base_folder / ("tmp_" + tmp_prefix)
 	try:
 		os.makedirs(tmp_base_folder, exist_ok=False)
 		annotation_folder = tmp_base_folder / "sample_annotations"
@@ -281,15 +285,15 @@ def handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_
 				sample_annotation_file = annotation_folder / (sample_name + "_" + sample_haplotype + ".gff3.gz")
 				tmp_folder = tmp_base_folder / ("tmp_" + sample_name + "_" + sample_haplotype)
 				os.makedirs(tmp_folder, exist_ok=False)
-				handle_new_sample_liftoff_use_tmp_folder(database_folder, tmp_folder, sample_annotation_file, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path)
+				handle_new_sample_liftoff_use_tmp_folder(base_folder, tmp_folder, sample_annotation_file, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path)
 				sample_info_with_annotations.append((sample_name, sample_haplotype, tmp_folder / (sample_name + "_" + sample_haplotype + ".fa"), sample_annotation_file))
 		print(f"{datetime.datetime.now().astimezone()}: Adding sample sequences to temporary agc file", file=sys.stderr)
-		temp_agc_path = add_samples_to_agc(database_folder, tmp_base_folder, sample_info_with_annotations, num_threads, agc_path)
+		temp_agc_path = add_samples_to_agc(base_folder, tmp_base_folder, sample_info_with_annotations, num_threads, agc_path)
 		print(f"{datetime.datetime.now().astimezone()}: Adding sample proteins to sql database", file=sys.stderr)
-		add_multiple_sample_proteins_to_database(database_folder / "sample_info.db", sample_info_with_annotations, num_threads)
+		add_multiple_sample_proteins_to_database(base_folder, sample_info_with_annotations, num_threads)
 		print(f"{datetime.datetime.now().astimezone()}: Copying temporary agc and annotation files to database folder", file=sys.stderr)
-		copy_annotations(database_folder, sample_info_with_annotations)
-		copy_agc(temp_agc_path, database_folder)
+		copy_annotations(base_folder, sample_info_with_annotations)
+		copy_agc(temp_agc_path, base_folder)
 		print(f"{datetime.datetime.now().astimezone()}: Finished adding samples successfully", file=sys.stderr)
 	finally:
 		shutil.rmtree(tmp_base_folder)

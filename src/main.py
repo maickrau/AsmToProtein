@@ -144,10 +144,10 @@ def export_alleles(args):
 	print(f"--transcript {args.transcript}", file=sys.stderr)
 	print(f"--include-gene-info {args.include_gene_info}", file=sys.stderr)
 	if args.transcript:
-		result = DatabaseOperations.get_alleles_of_transcript(pathlib.Path(args.database) / "sample_info.db", args.transcript)
+		result = DatabaseOperations.get_alleles_of_transcript(pathlib.Path(args.database), args.transcript)
 		result = [(args.transcript, result)]
 	else:
-		result = DatabaseOperations.get_alleles_of_all_transcripts(pathlib.Path(args.database) / "sample_info.db")
+		result = DatabaseOperations.get_alleles_of_all_transcripts(pathlib.Path(args.database))
 	if args.include_gene_info:
 		transcript_gene_info = DatabaseOperations.get_transcript_gene_chromosome_info(pathlib.Path(args.database) / "sample_info.db")
 	with open_file_or_stdout(args.output) as f:
