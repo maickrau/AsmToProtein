@@ -220,7 +220,7 @@ def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_fold
 			row_number += 1
 			parts = l.strip().split("\t")
 			if len(parts) != 3 and len(parts) != 4:
-				raise RuntimeError(f"Sample table file has wrong format. File should be a tab-separated file with three columns per row. Row {row_number} has {len(parts)} columns.")
+				raise RuntimeError(f"Sample table file has wrong format. File should be a tab-separated file with three or four columns per row. Row {row_number} has {len(parts)} columns.")
 			if row_number == 1:
 				if parts[0].lower() != "sample":
 					raise RuntimeError(f"Sample table file has wrong format. First column should be sample name. Header instead has \"{parts[0]}\".")

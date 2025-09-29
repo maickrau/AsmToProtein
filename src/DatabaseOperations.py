@@ -332,9 +332,12 @@ def get_alleles_of_all_transcripts(base_path):
 	with sqlite3.connect(str(base_path / "sample_info.db")) as connection:
 		cursor = connection.cursor()
 		result_per_transcript = {}
-		for transcript, name, sequenceID, copycount in cursor.execute("SELECT Transcript.Name, Allele.Name, Allele.SequenceID, COUNT(*) FROM Allele INNER JOIN Transcript ON Allele.TranscriptId=Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId=Allele.Id GROUP BY Allele.Name, Allele.SequenceID, Transcript.Name", ()):
+		allele_coverage = {}
+		for alleleid, coverage in cursor.execute("SELECT AlleleId, COUNT(*) FROM SampleProtein GROUP BY AlleleId", ()):
+			allele_coverage[alleleid] = coverage
+		for transcript, name, sequenceID, alleleid in cursor.execute("SELECT Transcript.Name, Allele.Name, Allele.SequenceID, Allele.Id FROM Allele INNER JOIN Transcript ON Allele.TranscriptId=Transcript.Id", ()):
 			if transcript not in result_per_transcript: result_per_transcript[transcript] = []
-			result_per_transcript[transcript].append((name, allele_sequences[sequenceID], copycount))
+			result_per_transcript[transcript].append((name, allele_sequences[sequenceID], allele_coverage[alleleid]))
 		result = []
 		for transcript, alleles in result_per_transcript.items():
 			alleles.sort()

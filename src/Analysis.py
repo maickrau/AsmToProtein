@@ -76,7 +76,7 @@ def chi_squared_test(database_file, groups, transcript):
 		total_sample_size += count
 	info_per_transcript = get_contingency_tables(database_file, groups, transcript)
 	p_values = []
-	for transcript, result in info_per_transcript:
+	for transcript, result in info_per_transcript[1]:
 		observed = []
 		for row in result:
 			for value in row[1]:
