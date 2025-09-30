@@ -13,7 +13,7 @@ def parse_attributes(attr_string):
 
 def parse_gff3_gene_names_of_transcripts(gff3_path):
 	"""
-	Reads a GFF3 file and returns the gene names and IDs of transcripts.
+	Reads a GFF3 file and returns the gene names and IDs of protein coding transcripts.
 
 	Args:
 		gff3_path: Path to gff3
@@ -23,6 +23,7 @@ def parse_gff3_gene_names_of_transcripts(gff3_path):
 	"""
 	transcript_gene = {}
 	gene_name = {}
+	protein_coding = set()
 	with Util.open_maybe_gzipped(gff3_path) as f:
 		for line in f:
 			if line.startswith('#') or not line.strip():
@@ -36,8 +37,11 @@ def parse_gff3_gene_names_of_transcripts(gff3_path):
 				transcript_gene[attrs['ID']] = attrs['Parent']
 			if feature_type == "gene":
 				gene_name[attrs['ID']] = attrs['gene_name']
+				if attrs.get('gene_type') == "protein_coding" or attrs.get('gene_biotype') == "protein_coding":
+					protein_coding.add(attrs['ID'])
 	result = {}
 	for transcript in transcript_gene:
+		if transcript_gene[transcript] not in protein_coding: continue
 		result[transcript] = (gene_name[transcript_gene[transcript]], transcript_gene[transcript])
 	return result
 
