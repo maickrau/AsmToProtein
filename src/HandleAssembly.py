@@ -52,10 +52,7 @@ def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threa
 #			sample_transcripts = TranscriptExtractor.process_sample_transcripts(sample_fasta, sample_annotation)
 #			(gene_locations, transcript_locations) = Gff3Parser.parse_gene_transcript_locations(sample_annotation)
 			for transcript_id, sequence, extra_copy in sample_transcripts:
-				name = transcript_id
-				if extra_copy != 0:
-					name = "_".join(name.split("_")[:-1])
-				result_here.append((name, sequence, transcript_locations[transcript_id]))
+				result_here.append((transcript_id, sequence, transcript_locations[transcript_id]))
 			output_transcript_queue.put((index, result_here, contig_lengths))
 	input_ids = queue.Queue(len(sample_info))
 	output_transcripts = queue.Queue(len(sample_info))

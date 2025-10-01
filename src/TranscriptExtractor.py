@@ -147,6 +147,10 @@ def process_sample_transcripts_and_contigs(input_file, lifted_gff):
 				continue
 			seq = get_transcript_dna_sequence(tx, contig_seq)
 			seq = translate_dna(seq)
-			transcripts_data.append((tx['transcript_id'], seq, tx.get('extra_copy_number', 0)))
+			transcript_name = tx['transcript_id']
+			extra_copy_number = tx.get('extra_copy_number', 0)
+			if extra_copy_number != 0:
+				transcript_name = "_".join(transcript_name.split("_")[:-1])
+			transcripts_data.append((transcript_name, seq, extra_copy_number))
 
 	return (transcripts_data, gene_locations, transcript_locations, result_contig_lengths)
