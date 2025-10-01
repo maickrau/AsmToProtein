@@ -765,6 +765,22 @@ def initialize_sqlite_db_schema(database_path):
 		cursor.executescript(make_tables_command)
 		connection.commit()
 
+def check_alleles_have_names(database_folder):
+	"""
+	Checks that all alleles have names
+
+	Args:
+		database_folder: Path to database folder. Type should be pathlib.Path
+
+	Returns:
+		True if all alleles have names, False otherwise
+	"""
+	with sqlite3.connect(str(database_folder + "/sample_info.db")) as connection:
+		cursor = connection.cursor()
+		any_unnamed = cursor.execute("SELECT Id FROM Allele WHERE Name IS NULL LIMIT 1").fetchall()
+		if len(any_unnamed) > 0: return False
+	return True
+
 def insert_reference_annotations_to_db(database_path, reference_gff3):
 	"""
 	Fills the database tables Gene, Transcript with the reference annotation.

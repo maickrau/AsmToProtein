@@ -111,6 +111,9 @@ def contingency_table(args):
 	print(f"--group {", ".join(groups)}", file=sys.stderr)
 	print(f"--table {args.table}", file=sys.stderr)
 	print(f"--include-gene-info {args.include_gene_info}", file=sys.stderr)
+	if not DatabaseOperations.check_alleles_have_names(args.database):
+		print("Error: Some alleles do not have names. Please run the renamealleles command.", file=sys.stderr)
+		exit(1)
 	if len(groups) < 2 and args.table is None:
 		print("Either sample table (--sample) or at least two groups (--group) are required", file=sys.stderr)
 		print("Groups should all be listed at once (eg. \"--group group1 group2 group3\", not \"--group group1 --group group2 --group group3\")", file=sys.stderr)
@@ -143,6 +146,9 @@ def export_alleles(args):
 	print(f"-o {args.output}", file=sys.stderr)
 	print(f"--transcript {args.transcript}", file=sys.stderr)
 	print(f"--include-gene-info {args.include_gene_info}", file=sys.stderr)
+	if not DatabaseOperations.check_alleles_have_names(args.database):
+		print("Error: Some alleles do not have names. Please run the renamealleles command.", file=sys.stderr)
+		exit(1)
 	if args.transcript:
 		result = DatabaseOperations.get_alleles_of_transcript(pathlib.Path(args.database), args.transcript)
 		result = [(args.transcript, result)]
@@ -168,6 +174,9 @@ def export_allelesets(args):
 	print(f"-o {args.output}", file=sys.stderr)
 	print(f"--transcript {args.transcript}", file=sys.stderr)
 	print(f"--include-gene-info {args.include_gene_info}", file=sys.stderr)
+	if not DatabaseOperations.check_alleles_have_names(args.database):
+		print("Error: Some alleles do not have names. Please run the renamealleles command.", file=sys.stderr)
+		exit(1)
 	if args.transcript:
 		result = DatabaseOperations.get_allelesets_of_one_transcript(pathlib.Path(args.database) / "sample_info.db", args.transcript)
 	else:
@@ -198,6 +207,9 @@ def chi_square(args):
 	print(f"--group {", ".join(groups)}", file=sys.stderr)
 	print(f"--table {args.table}", file=sys.stderr)
 	print(f"--include-gene-info {args.include_gene_info}", file=sys.stderr)
+	if not DatabaseOperations.check_alleles_have_names(args.database):
+		print("Error: Some alleles do not have names. Please run the renamealleles command.", file=sys.stderr)
+		exit(1)
 	if len(groups) < 2 and args.table is None:
 		print("Either sample table (--sample) or at least two groups (--group) are required", file=sys.stderr)
 		print("Groups should all be listed at once (eg. \"--group group1 group2 group3\", not \"--group group1 --group group2 --group group3\")", file=sys.stderr)
@@ -233,6 +245,8 @@ def validate(args):
 	print("Input parameters:", file=sys.stderr)
 	print(f"-db {args.database}", file=sys.stderr)
 	errors = DatabaseOperations.check_if_haplotypes_are_fine(pathlib.Path(args.database) / "sample_info.db")
+	if not DatabaseOperations.check_alleles_have_names(args.database):
+		errors.append("Some alleles do not have names. Please run the renamealleles command.", file=sys.stderr)
 	if len(errors) == 0:
 		print("No validation errors found, everything appears good.", file=sys.stderr)
 	else:
