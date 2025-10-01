@@ -689,20 +689,14 @@ def rename_alleles_by_coverage(database_path):
 		reference_allele = {}
 		allele_belongs_to_transcript = {}
 		print(f"{datetime.datetime.now().astimezone()}: Get allele to transcript mapping", file=sys.stderr)
-		for x in cursor.execute("EXPLAIN QUERY PLAN SELECT TranscriptId, Id FROM Allele"):
-			print(x, file=sys.stderr)
 		for transcript, allele in cursor.execute("SELECT TranscriptId, Id FROM Allele"):
 			allele_belongs_to_transcript[allele] = transcript
 		print(f"{datetime.datetime.now().astimezone()}: Get allele coverages", file=sys.stderr)
-		for x in cursor.execute("EXPLAIN QUERY PLAN SELECT AlleleId, COUNT(*) FROM SampleProtein GROUP BY AlleleId").fetchall():
-			print(x, file=sys.stderr)
 		for allele, coverage in cursor.execute("SELECT AlleleId, COUNT(*) FROM SampleProtein GROUP BY AlleleId").fetchall():
 			transcript = allele_belongs_to_transcript[allele]
 			if transcript not in allele_coverages_per_transcript: allele_coverages_per_transcript[transcript] = []
 			allele_coverages_per_transcript[transcript].append((coverage, allele))
 		print(f"{datetime.datetime.now().astimezone()}: Get reference alleles", file=sys.stderr)
-		for x in cursor.execute("EXPLAIN QUERY PLAN SELECT TranscriptId, Allele.Id FROM Allele INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId = Sample.Id WHERE Sample.Name='reference'").fetchall():
-			print(x, file=sys.stderr)
 		for transcript, allele in cursor.execute("SELECT DISTINCT TranscriptId, Allele.Id FROM Allele INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId = Sample.Id WHERE Sample.Name='reference'").fetchall():
 			if transcript not in reference_allele:
 				reference_allele[transcript] = allele

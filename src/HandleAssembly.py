@@ -49,8 +49,6 @@ def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threa
 			print(f"{datetime.datetime.now().astimezone()}: Get transcripts of sample {sample_name} haplotype {sample_haplotype}", file=sys.stderr)
 			result_here = []
 			(sample_transcripts, gene_locations, transcript_locations, contig_lengths) = TranscriptExtractor.process_sample_transcripts_and_contigs(sample_fasta, sample_annotation)
-#			sample_transcripts = TranscriptExtractor.process_sample_transcripts(sample_fasta, sample_annotation)
-#			(gene_locations, transcript_locations) = Gff3Parser.parse_gene_transcript_locations(sample_annotation)
 			for transcript_id, sequence, extra_copy in sample_transcripts:
 				result_here.append((transcript_id, sequence, transcript_locations[transcript_id]))
 			output_transcript_queue.put((index, result_here, contig_lengths))
