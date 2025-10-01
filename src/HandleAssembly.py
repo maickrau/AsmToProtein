@@ -30,16 +30,74 @@ def prepare_fasta(input_path, output_path):
 			print(">" + name, file=f)
 			print(sequence, file=f)
 
-def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threads):
+def compare_samples_to_database(base_folder, sample_table_file, num_threads, liftoff_path):
 	"""
-	Adds proteins of a sample to the database. Assumes that liftoff has already been ran
+	Compares multiple new samples to the database. Runs liftoff if necessary and gets transcripts, finds novel alleles and allele sets, and sample allele sets. Creates a temp folder with all temp files which is deleted in the end.
 
 	Args:
-		base_folder: Base folder
-		sample_info: List of tuples of (sample_name, sample_haplotype, sample_fasta_file_path, sample_annotation_file_path)
-		num_threads: Number of threads to use. Processing each sample uses one thread but multiple samples can be processed in parallel
+		base_folder: Folder where database files are located. Type should be pathlib.Path
+		sample_table_file: Tsv file with sample info
+		num_threads: Number of threads
+		liftoff_path: Path to liftoff executable
+
+	Returns:
+		tuple of (novel_alleles, novel_allelesets, sample_allelesets)
+		Format of novel_alleles is [(transcript, allele_name, allele_sequence)]
+		Format of novel_allelesets is [(transcript, sample, alleleset)]
+		Format of sample_allelesets is [(transcript, sample, alleleset)]
 	"""
-	print(f"step 1 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	sample_info = read_sample_info_from_table(sample_table_file)
+	dupes = check_sample_duplicates(sample_info)
+	if dupes:
+		raise RuntimeError(f"Duplicate sample: sample name \"{dupes[0]}\" haplotype \"{dupes[1]}\"")
+	incongruents = check_samples_with_incongruent_haplotypes(sample_info)
+	if len(incongruents) > 0:
+		invalid_samples = []
+		for sample, haplotypes in incongruents:
+			invalid_samples += f"sample \"{sample}\" haplotypes \"{",".join(haplotypes)}\""
+		invalid_samples_string = " ; ".join(invalid_samples)
+		raise RuntimeError(f"Invalid haplotypes in samples. All samples should have two haplotypes, either \"1\" and \"2\" or \"mat\" and \"pat\". Invalid samples and their haplotypes: {invalid_samples_string}")
+	for sample_name, sample_haplotype, _, _ in sample_info:
+		sample_exists = check_if_sample_exists(base_folder, sample_name, sample_haplotype)
+		if sample_exists:
+			raise RuntimeError(f"Sample already exists in the database: name \"{sample_name}\" haplotype \"{sample_haplotype}\"")
+	tmp_prefix = Util.make_random_prefix()
+	tmp_base_folder = base_folder / ("tmp_" + tmp_prefix)
+	result = None
+	try:
+		os.makedirs(tmp_base_folder, exist_ok=False)
+		annotation_folder = tmp_base_folder / "sample_annotations"
+		os.makedirs(annotation_folder, exist_ok=False)
+		sample_info_with_annotations = []
+		for sample_name, sample_haplotype, sample_sequence, annotation in sample_info:
+			if annotation:
+				print(f"{datetime.datetime.now().astimezone()}: Using annotations for sample \"{sample_name}\" haplotype \"{sample_haplotype}\" from path \"{annotation}\"", file=sys.stderr)
+				sample_info_with_annotations.append((sample_name, sample_haplotype, sample_sequence, annotation))
+			else:
+				print(f"{datetime.datetime.now().astimezone()}: Running liftoff for sample \"{sample_name}\" haplotype \"{sample_haplotype}\"", file=sys.stderr)
+				sample_annotation_file = annotation_folder / (sample_name + "_" + sample_haplotype + ".gff3.gz")
+				tmp_folder = tmp_base_folder / ("tmp_" + sample_name + "_" + sample_haplotype)
+				os.makedirs(tmp_folder, exist_ok=False)
+				handle_new_sample_liftoff_use_tmp_folder(base_folder, tmp_folder, sample_annotation_file, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path)
+				sample_info_with_annotations.append((sample_name, sample_haplotype, tmp_folder / (sample_name + "_" + sample_haplotype + ".fa"), sample_annotation_file))
+		result = get_novel_alleles_allelesets(base_folder, sample_info_with_annotations, num_threads)
+	finally:
+		shutil.rmtree(tmp_base_folder)
+	return result
+
+def get_sample_transcripts_and_contig_lens(sample_info, num_threads):
+	"""
+	Reads sample annotations and sequences, processes transcripts and contig lens. Assumes annotations are already present.
+
+	Args:
+		sample_info: List of [(sample_name, sample_haplotype, sample_sequence_file_path, sample_annotation_file_path)]
+		num_threads: Number of threads
+
+	Returns:
+		(sample_transcripts, sample_contig_lengths)
+		Format of sample_transcripts is [(transcript_id, sequence, transcript_location)]
+		Format of sample_contig_lengths is dict of (contig -> length)
+	"""
 	threads = []
 	def process_transcripts(sample_info, input_id_queue, output_transcript_queue):
 		while True:
@@ -54,7 +112,6 @@ def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threa
 			output_transcript_queue.put((index, result_here, contig_lengths))
 	input_ids = queue.Queue(len(sample_info))
 	output_transcripts = queue.Queue(len(sample_info))
-	output_contig_lengths = queue.Queue(len(sample_info))
 	for i in range(0, len(sample_info)):
 		input_ids.put(i)
 	for i in range(0, num_threads):
@@ -78,6 +135,98 @@ def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threa
 	for i in range(0, len(sample_info)):
 		assert all_processed_transcripts[i] is not None
 		assert all_sample_contig_lens[i] is not None
+	return all_processed_transcripts, all_sample_contig_lens
+
+def get_novel_alleles_allelesets(base_folder, sample_info, num_threads):
+	"""
+	Gets the novel alleles of samples, novel allelesets, and all sample allelesets. Assumes that liftoff has already been ran
+
+	Args:
+		base_folder: Base folder
+		sample_info: List of tuples of (sample_name, sample_haplotype, sample_fasta_file_path, sample_annotation_file_path)
+		num_threads: Number of threads to use. Processing each sample uses one thread but multiple samples can be processed in parallel
+
+	Returns:
+		tuple of (novel_alleles, novel_allelesets, sample_allelesets)
+		Format of novel_alleles is [(transcript, allele_name, allele_sequence)]
+		Format of novel_allelesets is [(transcript, sample, alleleset)]
+		Format of sample_allelesets is [(transcript, sample, alleleset)]
+	"""
+	print(f"step 1 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	all_processed_transcripts, all_sample_contig_lens = get_sample_transcripts_and_contig_lens(sample_info, num_threads)
+	print(f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	transcript_id_map = {}
+	allele_name_map = {}
+	allele_sequences = DatabaseOperations.get_allele_sequences_from_file(str(base_folder / "alleles.fa"))
+	novel_alleles = set()
+	next_novel_per_transcript = {}
+	novel_sample_transcript_alleles = {}
+	with sqlite3.connect(str(base_folder / "sample_info.db")) as connection:
+		cursor = connection.cursor()
+		cursor.arraysize = 10000
+		for db_id, transcript_id in cursor.execute("SELECT Id, Name FROM Transcript").fetchall():
+			transcript_id_map[transcript_id] = db_id
+		for allele_name, transcript_id, transcript_sequence_id in cursor.execute("SELECT Name, TranscriptId, SequenceId FROM Allele").fetchall():
+			allele_name_map[(transcript_id, allele_sequences[transcript_sequence_id])] = allele_name
+		for sampleindex in range(0, len(sample_info)):
+			sample_name = sample_info[sampleindex][0]
+			processed_transcripts = all_processed_transcripts[sampleindex]
+			for (transcript_id, sequence, location) in processed_transcripts:
+				transcript_db_id = transcript_id_map[transcript_id]
+				if (transcript_db_id, sequence) not in allele_name_map:
+					if transcript_db_id not in next_novel_per_transcript: next_novel_per_transcript[transcript_db_id] = 0
+					novel_name = "novel_" + DatabaseOperations.get_allele_name(next_novel_per_transcript[transcript_db_id])
+					novel_alleles.add((transcript_id, novel_name, sequence))
+					allele_name_map[transcript_db_id, sequence] = novel_name
+					next_novel_per_transcript[transcript_db_id] += 1
+				allele_name = allele_name_map[transcript_db_id, sequence]
+				if sample_name not in novel_sample_transcript_alleles: novel_sample_transcript_alleles[sample_name] = {}
+				if transcript_id not in novel_sample_transcript_alleles[sample_name]: novel_sample_transcript_alleles[sample_name][transcript_id] = []
+				novel_sample_transcript_alleles[sample_name][transcript_id].append(allele_name)
+	for sample in novel_sample_transcript_alleles:
+		for transcript in novel_sample_transcript_alleles[sample]:
+			novel_sample_transcript_alleles[sample][transcript].sort(key=lambda x: DatabaseOperations.allele_sort_order(x))
+			alleleset = tuple(novel_sample_transcript_alleles[sample][transcript])
+			novel_sample_transcript_alleles[sample][transcript] = alleleset
+	existing_allelesets = {}
+	with sqlite3.connect(str(base_folder / "sample_info.db")) as connection:
+		cursor = connection.cursor()
+		cursor.arraysize = 10000
+		sample_transcript_alleles = {}
+		for allele_name, transcript, sample_name in cursor.execute("SELECT Allele.Name, Transcript.Name, Sample.Name FROM SampleProtein INNER JOIN Allele ON SampleProtein.AlleleId = Allele.Id INNER JOIN Transcript ON Allele.TranscriptId = Transcript.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Sample.Id = Haplotype.SampleId"):
+			if sample_name not in sample_transcript_alleles: sample_transcript_alleles[sample_name] = {}
+			if transcript not in sample_transcript_alleles[sample_name]: sample_transcript_alleles[sample_name][transcript] = []
+			sample_transcript_alleles[sample_name][transcript].append(allele_name)
+		for sample in sample_transcript_alleles:
+			for transcript in sample_transcript_alleles[sample]:
+				sample_transcript_alleles[sample][transcript].sort(key=lambda x: DatabaseOperations.allele_sort_order(x))
+				alleleset = tuple(sample_transcript_alleles[sample][transcript])
+				if transcript not in existing_allelesets: existing_allelesets[transcript] = set()
+				existing_allelesets[transcript].add(alleleset)
+	novel_allelesets = []
+	all_sample_allelesets = []
+	for sample in novel_sample_transcript_alleles:
+		for transcript in novel_sample_transcript_alleles[sample]:
+			if novel_sample_transcript_alleles[sample][transcript] not in existing_allelesets[transcript]:
+				novel_allelesets.append((transcript, sample, novel_sample_transcript_alleles[sample][transcript]))
+			all_sample_allelesets.append((transcript, sample, novel_sample_transcript_alleles[sample][transcript]))
+	novel_alleles = list(novel_alleles)
+	novel_alleles.sort(key=lambda x: (x[0], x[1], DatabaseOperations.allele_sort_order(x[2])))
+	novel_allelesets.sort(key=lambda x: (x[0], x[1], DatabaseOperations.alleleset_sort_order(x[2])))
+	all_sample_allelesets.sort(key=lambda x: (x[0], x[1], DatabaseOperations.alleleset_sort_order(x[2])))
+	return (novel_alleles, novel_allelesets, all_sample_allelesets)
+
+def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threads):
+	"""
+	Adds proteins of a sample to the database. Assumes that liftoff has already been ran
+
+	Args:
+		base_folder: Base folder
+		sample_info: List of tuples of (sample_name, sample_haplotype, sample_fasta_file_path, sample_annotation_file_path)
+		num_threads: Number of threads to use. Processing each sample uses one thread but multiple samples can be processed in parallel
+	"""
+	print(f"step 1 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	all_processed_transcripts, all_sample_contig_lens = get_sample_transcripts_and_contig_lens(sample_info, num_threads)
 	print(f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	transcript_id_map = {}
 	allele_name_map = {}
@@ -195,16 +344,15 @@ def run_liftoff(database_folder, input_sequence, output, num_threads, liftoff_pa
 	finally:
 		shutil.rmtree(tmp_folder)
 
-def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_folder, sample_table_file, num_threads, liftoff_path, agc_path):
+def read_sample_info_from_table(sample_table_file):
 	"""
-	Handles multiple samples. Adds the sample sequences to the agc database, runs liftoff and gets transcripts, and adds the transcripts to the sample annotation sql database. Creates a temp folder with all temp files which is deleted in the end.
-	If sample table file has a column for annotation, then annotations are copied from there instead of rerun
+	Reads sample info table from tsv file
 
 	Args:
-		database_folder: Folder where database files are located. Type should be pathlib.Path
 		sample_table_file: Tsv file with descriptions of the samples
-		liftoff_path: Path to liftoff executable
-		agc_path: Path to agc executable
+
+	Returns:
+		[(sample_name, sample_haplotype, sample_assembly_file_path, sample_annotation_file_path)]
 	"""
 	sample_info = []
 	row_number = 0
@@ -239,13 +387,68 @@ def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_fold
 				raise RuntimeError(f"Sample assembly file in row {row_number} cannot be read: file \"{parts[2]}\", sample \"{parts[0]}\" haplotype \"{parts[1]}\"")
 			if annotation is not None and not Util.file_exists(annotation):
 				raise RuntimeError(f"Sample annotation file in row {row_number} cannot be read: file \"{parts[3]}\", sample \"{parts[0]}\" haplotype \"{parts[1]}\"")
+	return sample_info
+
+def check_sample_duplicates(sample_info):
+	"""
+	Checks if sample info has duplicates
+
+	Args:
+		sample_info: [(sample_name, sample_haplotype, sample_assembly_file_path, sample_annotation_file_path)]
+
+	Returns:
+		None if no duplicates are present, (sample, haplotype) of one duplicate otherwise
+	"""
 	has_duplicates = False
 	sample_name_and_haplotypes = set()
 	for row in sample_info:
 		key = (row[0], row[1])
 		if key in sample_name_and_haplotypes:
-			raise RuntimeError(f"Duplicate sample and haplotype: sample \"{key[0]}\" haplotype \"{key[1]}\"")
+			return key
 		sample_name_and_haplotypes.add(key)
+
+def check_samples_with_incongruent_haplotypes(sample_info):
+	"""
+	Checks if every sample has two haplotypes, which are named either 1 and 2 or mat and pat
+
+	Args:
+		sample_info: [(sample_name, sample_haplotype, sample_assembly_file_path, sample_annotation_file_path)]
+
+	Returns:
+		List of samples with wrong haplotypes. Empty list if all fine. Format is [(sample_name, [sample_haplotype])]
+	"""
+	sample_haplotypes = {}
+	for row in sample_info:
+		sample_name = row[0]
+		sample_haplotype = row[1]
+		if sample_name not in sample_haplotypes: sample_haplotypes[sample_name] = []
+		sample_haplotypes[sample_name].append(sample_haplotype)
+	incongruent = []
+	for sample in sample_haplotypes:
+		sample_haplotypes[sample].sort()
+		if len(sample_haplotypes[sample]) == 2:
+			if sample_haplotypes[sample][0] == "1" and sample_haplotypes[sample][1] == "2":
+				continue
+			if sample_haplotypes[sample][0] == "mat" and sample_haplotypes[sample][1] == "pat":
+				continue
+		incongruent.append((sample, sample_haplotypes[sample]))
+	return incongruent
+
+def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_folder, sample_table_file, num_threads, liftoff_path, agc_path):
+	"""
+	Handles multiple samples. Adds the sample sequences to the agc database, runs liftoff and gets transcripts, and adds the transcripts to the sample annotation sql database. Creates a temp folder with all temp files which is deleted in the end.
+	If sample table file has a column for annotation, then annotations are copied from there instead of rerun
+
+	Args:
+		database_folder: Folder where database files are located. Type should be pathlib.Path
+		sample_table_file: Tsv file with descriptions of the samples
+		liftoff_path: Path to liftoff executable
+		agc_path: Path to agc executable
+	"""
+	sample_info = read_sample_info_from_table(sample_table_file)
+	has_dupes = check_sample_duplicates(sample_info)
+	if has_dupes:
+		raise RuntimeError(f"Duplicate sample and haplotype: sample \"{has_dupes[0]}\" haplotype \"{has_dupes[1]}\"")
 	print(f"Adding {len(sample_info)} new assemblies", file=sys.stderr)
 	handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_info, num_threads, liftoff_path, agc_path)
 

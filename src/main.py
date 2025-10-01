@@ -264,6 +264,28 @@ def create_db(args):
 	print(f"--agc {args.agc}", file=sys.stderr)
 	DatabaseOperations.initialize_database(pathlib.Path(args.database), args.reference_genome, args.annotation, args.liftoff, args.agc, int(args.threads))
 
+def compare_novel(args):
+	print("Input parameters:", file=sys.stderr)
+	print(f"-db {args.database}", file=sys.stderr)
+	print(f"--table {args.table}", file=sys.stderr)
+	print(f"-t {args.threads}", file=sys.stderr)
+	print(f"-o {args.output}", file=sys.stderr)
+	print(f"--liftoff {args.liftoff}", file=sys.stderr)
+	transcript_gene_info = DatabaseOperations.get_transcript_gene_chromosome_info(pathlib.Path(args.database) / "sample_info.db")
+	novel_alleles, novel_allelesets, sample_allelesets = HandleAssembly.compare_samples_to_database(pathlib.Path(args.database), args.table, int(args.threads), args.liftoff)
+	with open(args.output + "_novel_alleles.tsv", "w") as f:
+		print(f"Chromosome\tGene\tTranscript\tName\tSequence", file=f)
+		for transcript, name, sequence in novel_alleles:
+			print(f"{transcript_gene_info[transcript][1]}\t{transcript_gene_info[transcript][0]}\t{transcript}\t{name}\t{sequence}", file=f)
+	with open(args.output + "_novel_allelesets.tsv", "w") as f:
+		print(f"Chromosome\tGene\tTranscript\tSample\tAlleleset", file=f)
+		for transcript, name, alleleset in novel_allelesets:
+			print(f"{transcript_gene_info[transcript][1]}\t{transcript_gene_info[transcript][0]}\t{transcript}\t{name}\t{"+".join(alleleset)}", file=f)
+	with open(args.output + "_allelesets.tsv", "w") as f:
+		print(f"Chromosome\tGene\tTranscript\tSample\tAlleleset", file=f)
+		for transcript, name, alleleset in sample_allelesets:
+			print(f"{transcript_gene_info[transcript][1]}\t{transcript_gene_info[transcript][0]}\t{transcript}\t{name}\t{"+".join(alleleset)}", file=f)
+
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(prog="AsmToProtein", description="Protein isoform analysis from de novo genome assemblies.")
 	subparsers = parser.add_subparsers(dest="subparser_name")
@@ -368,6 +390,14 @@ if __name__ == "__main__":
 	export_alleles_parser.add_argument('-o', '--output', default="-", help='Output file (- for stdout) (default -)')
 	export_alleles_parser.add_argument('--include-gene-info', action="store_true", help='Include information about gene in the output table.')
 	export_alleles_parser.set_defaults(func=export_alleles)
+
+	compare_novel_parser = subparsers.add_parser("comparesamples", description="Compare samples to database")
+	compare_novel_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
+	compare_novel_parser.add_argument('--table', required=True, help='Table with novel samples to include')
+	compare_novel_parser.add_argument('-o', '--output', default="result", help='Output prefix (default \"result\")')
+	compare_novel_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
+	compare_novel_parser.add_argument('--liftoff', default="liftoff", help="Path to liftoff")
+	compare_novel_parser.set_defaults(func=compare_novel)
 
 	args = parser.parse_args()
 	if not args.subparser_name:

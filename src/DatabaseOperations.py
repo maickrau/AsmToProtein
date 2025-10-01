@@ -15,7 +15,7 @@ import Util
 
 def allele_sort_order(allele):
 	"""
-	Orders alleles so ref is first, rest ordered by A, B, C, ... ZZ, AA, AB
+	Orders alleles so ref is first, rest ordered by A, B, C, ... ZZ, AA, AB, and novel alleles afterwards ordered by novel_A, novel_B ...
 
 	Args:
 		allele: Allele name
@@ -24,10 +24,16 @@ def allele_sort_order(allele):
 		Integer describing allele order
 	"""
 	if allele == "ref": return 0
+	is_novel = False
+	if allele[0:6] == "novel_":
+		is_novel = True
+		allele = allele[6:]
 	result = 1
 	for c in allele[::-1]:
 		result *= 26
 		result += ord(c) - ord('A') + 1
+	if is_novel:
+		result *= 10000 # hope there aren't more than 10000 alleles per transcript lol
 	return result
 
 def alleleset_sort_order(alleleset):
@@ -35,11 +41,11 @@ def alleleset_sort_order(alleleset):
 	Orders an allele set so missing is first, followed by elementwise comparisons
 	"""
 	if len(alleleset) == 0:
-		return 0
-	result = 1
+		return (0)
+	result = []
 	for c in alleleset:
-		result *= 1000 # hope there aren't more than 1000 alleles per transcript lol
-		result += allele_sort_order(c) + 1
+		result.append(allele_sort_order(c) + 1)
+	result = tuple(result)
 	return result
 
 def get_allele_name(index):
