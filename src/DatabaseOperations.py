@@ -422,10 +422,8 @@ def get_all_allelesets_per_haplotype(database_path):
 		for transcript in allelesets_per_sample:
 			sample_lines = []
 			for (sample, haplotype) in all_samples:
-				if (sample, haplotype) not in allelesets_per_sample[transcript]:
-					sample_lines.append((sample, haplotype, "missing"))
-				else:
-					sample_lines.append((sample, haplotype, "+".join(allelesets_per_sample[transcript][(sample, haplotype)])))
+				alleleset = allelesets_per_sample[transcript].get((sample, haplotype), ())
+				sample_lines.append((sample, haplotype, Util.get_alleleset_name(alleleset)))
 			result.append((transcript, sample_lines))
 		result.sort()
 		return result
@@ -462,10 +460,8 @@ def get_allelesets_of_one_transcript(database_path, transcript):
 		for transcript in allelesets_per_sample:
 			sample_lines = []
 			for sample in all_samples:
-				if sample not in allelesets_per_sample[transcript]:
-					sample_lines.append((sample, "missing"))
-				else:
-					sample_lines.append((sample, "+".join(allelesets_per_sample[transcript][sample])))
+				alleleset = allelesets_per_sample[transcript].get(sample, ())
+				sample_lines.append((sample, Util.get_alleleset_name(alleleset)))
 			result.append((transcript, sample_lines))
 		result.sort()
 		return result
@@ -502,10 +498,8 @@ def get_all_allelesets(database_path):
 		for transcript in allelesets_per_sample:
 			sample_lines = []
 			for sample in all_samples:
-				if sample not in allelesets_per_sample[transcript]:
-					sample_lines.append((sample, "missing"))
-				else:
-					sample_lines.append((sample, "+".join(allelesets_per_sample[transcript][sample])))
+				alleleset = allelesets_per_sample[transcript].get(sample, ())
+				sample_lines.append((sample, Util.get_alleleset_name(alleleset)))
 			result.append((transcript, sample_lines))
 		result.sort()
 		return result
@@ -618,10 +612,7 @@ def get_all_transcripts_alleleset_contingency_table_by_group(database_path, grou
 		for transcript, countinfo in counts.items():
 			lines_here = []
 			for alleleset, groupcounts in countinfo.items():
-				if len(alleleset) == 0:
-					lines_here.append(("missing", groupcounts))
-				else:
-					lines_here.append(("+".join(alleleset), groupcounts))
+				lines_here.append((Util.get_alleleset_name(alleleset), groupcounts))
 			lines_here.sort(key=lambda x: alleleset_sort_order(x[0]))
 			result.append((transcript, lines_here))
 		result.sort()
@@ -675,10 +666,7 @@ def get_alleleset_contingency_table_by_group(database_path, transcript_name, gro
 				counts[allelesets_per_sample[sample]][i] += 1
 		result = []
 		for alleleset, groupcounts in counts.items():
-			if len(alleleset) == 0:
-				result.append(("missing", groupcounts))
-			else:
-				result.append(("+".join(alleleset), groupcounts))
+			result.append((Util.get_alleleset_name(alleleset), groupcounts))
 		result.sort(key=lambda x: alleleset_sort_order(x[0]))
 		return result
 

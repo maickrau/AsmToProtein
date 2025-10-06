@@ -26,3 +26,8 @@ def open_maybe_gzipped(filepath):
 		return gzip.open(filepath, 'rt')  # text mode
 	else:
 		return open(filepath, 'r')
+
+def get_alleleset_name(alleleset):
+	assert isinstance(alleleset, tuple)
+	if len(alleleset) == 0: return "missing"
+	return "+".join(alleleset)

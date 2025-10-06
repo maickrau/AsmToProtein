@@ -161,6 +161,7 @@ def get_novel_alleles_allelesets(base_folder, sample_info, num_threads):
 	novel_alleles = set()
 	next_novel_per_transcript = {}
 	novel_sample_transcript_alleles = {}
+	all_transcripts = set()
 	with sqlite3.connect(str(base_folder / "sample_info.db")) as connection:
 		cursor = connection.cursor()
 		cursor.arraysize = 10000
@@ -184,9 +185,16 @@ def get_novel_alleles_allelesets(base_folder, sample_info, num_threads):
 				if transcript_id not in novel_sample_transcript_alleles[sample_name]: novel_sample_transcript_alleles[sample_name][transcript_id] = []
 				novel_sample_transcript_alleles[sample_name][transcript_id].append(allele_name)
 	for sample in novel_sample_transcript_alleles:
-		for transcript in novel_sample_transcript_alleles[sample]:
-			novel_sample_transcript_alleles[sample][transcript].sort(key=lambda x: DatabaseOperations.allele_sort_order(x))
-			alleleset = tuple(novel_sample_transcript_alleles[sample][transcript])
+		for transcript in transcript_id_map:
+			alleleset = ()
+			if transcript in novel_sample_transcript_alleles[sample]:
+				novel_sample_transcript_alleles[sample][transcript] = list(novel_sample_transcript_alleles[sample][transcript])
+				novel_sample_transcript_alleles[sample][transcript].sort(key=lambda x: DatabaseOperations.allele_sort_order(x))
+				alleleset = tuple(novel_sample_transcript_alleles[sample][transcript])
+			novel_sample_transcript_alleles[sample][transcript] = alleleset
+		for transcript_id in transcript_id_map:
+			if transcript_id in novel_sample_transcript_alleles[sample]: continue
+			alleleset = ()
 			novel_sample_transcript_alleles[sample][transcript] = alleleset
 	existing_allelesets = {}
 	with sqlite3.connect(str(base_folder / "sample_info.db")) as connection:
@@ -198,9 +206,11 @@ def get_novel_alleles_allelesets(base_folder, sample_info, num_threads):
 			if transcript not in sample_transcript_alleles[sample_name]: sample_transcript_alleles[sample_name][transcript] = []
 			sample_transcript_alleles[sample_name][transcript].append(allele_name)
 		for sample in sample_transcript_alleles:
-			for transcript in sample_transcript_alleles[sample]:
-				sample_transcript_alleles[sample][transcript].sort(key=lambda x: DatabaseOperations.allele_sort_order(x))
-				alleleset = tuple(sample_transcript_alleles[sample][transcript])
+			for transcript in transcript_id_map:
+				alleleset = ()
+				if transcript in sample_transcript_alleles[sample]:
+					sample_transcript_alleles[sample][transcript].sort(key=lambda x: DatabaseOperations.allele_sort_order(x))
+					alleleset = tuple(sample_transcript_alleles[sample][transcript])
 				if transcript not in existing_allelesets: existing_allelesets[transcript] = set()
 				existing_allelesets[transcript].add(alleleset)
 	novel_allelesets = []

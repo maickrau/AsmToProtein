@@ -8,6 +8,7 @@ import math
 import DatabaseOperations
 import Analysis
 import HandleAssembly
+import Util
 
 # https://stackoverflow.com/questions/17602878/how-to-handle-both-with-open-and-sys-stdout-nicely
 @contextlib.contextmanager
@@ -280,11 +281,11 @@ def compare_novel(args):
 	with open(args.output + "_novel_allelesets.tsv", "w") as f:
 		print(f"Chromosome\tGene\tTranscript\tSample\tAlleleset", file=f)
 		for transcript, name, alleleset in novel_allelesets:
-			print(f"{transcript_gene_info[transcript][1]}\t{transcript_gene_info[transcript][0]}\t{transcript}\t{name}\t{"+".join(alleleset)}", file=f)
+			print(f"{transcript_gene_info[transcript][1]}\t{transcript_gene_info[transcript][0]}\t{transcript}\t{name}\t{Util.get_alleleset_name(alleleset)}", file=f)
 	with open(args.output + "_allelesets.tsv", "w") as f:
 		print(f"Chromosome\tGene\tTranscript\tSample\tAlleleset", file=f)
 		for transcript, name, alleleset in sample_allelesets:
-			print(f"{transcript_gene_info[transcript][1]}\t{transcript_gene_info[transcript][0]}\t{transcript}\t{name}\t{"+".join(alleleset)}", file=f)
+			print(f"{transcript_gene_info[transcript][1]}\t{transcript_gene_info[transcript][0]}\t{transcript}\t{name}\t{Util.get_alleleset_name(alleleset)}", file=f)
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(prog="AsmToProtein", description="Protein isoform analysis from de novo genome assemblies.")
