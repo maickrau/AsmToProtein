@@ -589,8 +589,10 @@ def get_all_transcripts_alleleset_contingency_table_by_group(database_path, grou
 			if len(groups_per_sample[sample]) >= 2:
 				raise RuntimeError(f"Samples are shared between groups {", ".join(groups_per_sample[sample])}")
 		allelesets_per_sample = {}
-		for transcript, sample, allele in cursor.execute(f"SELECT Transcript.Name, Haplotype.SampleId, Allele.Name FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN SampleGroup ON Haplotype.SampleId=SampleGroup.SampleId WHERE SampleGroup.GroupName IN ({",".join("?" for group in groups)})", tuple(groups)).fetchall():
+		for transcript, in cursor.execute(f"SELECT Transcript.Name FROM Transcript", ()).fetchall():
 			if transcript not in allelesets_per_sample: allelesets_per_sample[transcript] = {}
+		for transcript, sample, allele in cursor.execute(f"SELECT Transcript.Name, Haplotype.SampleId, Allele.Name FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN SampleGroup ON Haplotype.SampleId=SampleGroup.SampleId WHERE SampleGroup.GroupName IN ({",".join("?" for group in groups)})", tuple(groups)).fetchall():
+			assert transcript in allelesets_per_sample
 			if sample not in allelesets_per_sample[transcript]: allelesets_per_sample[transcript][sample] = []
 			allelesets_per_sample[transcript][sample].append(allele)
 		for transcript, samples in allelesets_per_sample.items():
