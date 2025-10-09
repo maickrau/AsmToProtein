@@ -83,19 +83,19 @@ def chi_squared_test(database_file, groups, transcript):
 				observed.append(float(value))
 		expected = []
 		groups_sum = [0.0] * (len(result[0][1]))
-		alleles_sum = [0.0] * len(result)
+		allelesets_sum = [0.0] * len(result)
 		for row in range(0, len(result)):
 			assert len(result[row][1]) == len(result[0][1])
 			for column in range(0, len(result[row][1])):
 				groups_sum[column] += float(result[row][1][column])
-				alleles_sum[row] += float(result[row][1][column])
+				allelesets_sum[row] += float(result[row][1][column])
 		total_sum = 0
 		for v in groups_sum:
 			total_sum += v
 		for row in range(0, len(result)):
 			for column in range(0, len(result[row][1])):
-				expected.append(alleles_sum[row] * groups_sum[column] / float(total_sum))
-		test_result = scipy.stats.chisquare(f_obs=observed, f_exp=expected, ddof=len(groups_sum)+len(alleles_sum)-2)
+				expected.append(allelesets_sum[row] * groups_sum[column] / float(total_sum))
+		test_result = scipy.stats.chisquare(f_obs=observed, f_exp=expected, ddof=len(groups_sum)+len(allelesets_sum)-2)
 		p_values.append((transcript, test_result.pvalue))
 	return (total_sample_size, group_counts, p_values)
 

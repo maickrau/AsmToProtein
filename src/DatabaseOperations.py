@@ -13,27 +13,27 @@ import Gff3Parser
 import HandleAssembly
 import Util
 
-def allele_sort_order(allele):
+def isoform_sort_order(isoform):
 	"""
-	Orders alleles so ref is first, rest ordered by A, B, C, ... ZZ, AA, AB, and novel alleles afterwards ordered by novel_A, novel_B ...
+	Orders isoforms so ref is first, rest ordered by A, B, C, ... ZZ, AA, AB, and novel isoforms afterwards ordered by novel_A, novel_B ...
 
 	Args:
-		allele: Allele name
+		isoform: Isoform name
 
 	Returns:
-		Integer describing allele order
+		Integer describing isoform order
 	"""
-	if allele == "ref": return 0
+	if isoform == "ref": return 0
 	is_novel = False
-	if allele[0:6] == "novel_":
+	if isoform[0:6] == "novel_":
 		is_novel = True
-		allele = allele[6:]
+		isoform = isoform[6:]
 	result = 1
-	for c in allele[::-1]:
+	for c in isoform[::-1]:
 		result *= 26
 		result += ord(c) - ord('A') + 1
 	if is_novel:
-		result *= 10000 # hope there aren't more than 10000 alleles per transcript lol
+		result *= 10000 # hope there aren't more than 10000 isoforms per transcript lol
 	return result
 
 def alleleset_sort_order(alleleset):
@@ -44,11 +44,11 @@ def alleleset_sort_order(alleleset):
 		return (0)
 	result = []
 	for c in alleleset:
-		result.append(allele_sort_order(c) + 1)
+		result.append(isoform_sort_order(c) + 1)
 	result = tuple(result)
 	return result
 
-def get_allele_name(index):
+def get_isoform_name(index):
 	result = ""
 	while True:
 		result += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[int(index % 26)]
@@ -162,9 +162,9 @@ def basic_stats(database_path):
 		print(f"Number of genes: {gene_count}")
 		transcript_count = cursor.execute("SELECT COUNT(*) FROM Transcript").fetchall()[0][0]
 		print(f"Number of transcripts: {transcript_count}")
-		isoform_count = cursor.execute("SELECT COUNT(*) FROM Allele").fetchall()[0][0]
+		isoform_count = cursor.execute("SELECT COUNT(*) FROM Isoform").fetchall()[0][0]
 		print(f"Number of distinct isoforms: {isoform_count}")
-		sample_allele_count = cursor.execute("SELECT COUNT(*) FROM SampleProtein").fetchall()[0][0]
+		sample_allele_count = cursor.execute("SELECT COUNT(*) FROM SampleAllele").fetchall()[0][0]
 		print(f"Number of alleles in all samples: {sample_allele_count}")
 
 def get_all_transcripts(database_path):
@@ -182,37 +182,37 @@ def get_all_transcripts(database_path):
 		transcripts = list(x[0] for x in cursor.execute("SELECT Name FROM Transcript ORDER BY Name", ()).fetchall())
 		return transcripts
 
-def add_alleles_to_fasta(file_path, novel_alleles):
+def add_isoforms_to_fasta(file_path, novel_isoforms):
 	"""
-	Adds allele sequences to allele fasta
+	Adds isoform sequences to isoform fasta
 
 	Args:
-		file_path: Path to allele fasta
-		novel_alleles: Set of novel alleles in format (transcript_id, allele_sequence)
+		file_path: Path to isoform fasta
+		novel_isoforms: Set of novel isoforms in format (transcript_id, isoform_sequence)
 
 	Returns:
-		List of inserted alleles in format [(transcript_id, sequence_id)]
+		List of inserted isoforms in format [(transcript_id, sequence_id)]
 	"""
 	next_free_sequence_id = 0
 	for name, _ in SequenceReader.stream_sequences(file_path):
-		allele_id = int(name)
-		next_free_sequence_id = max(next_free_sequence_id, allele_id)
+		isoform_id = int(name)
+		next_free_sequence_id = max(next_free_sequence_id, isoform_id)
 	next_free_sequence_id += 1
 	result = []
 	with open(file_path, "a") as f:
-		for transcript_id, sequence in novel_alleles:
+		for transcript_id, sequence in novel_isoforms:
 			f.write(">" + str(next_free_sequence_id) + "\n")
 			f.write(sequence + "\n")
 			result.append((transcript_id, next_free_sequence_id))
 			next_free_sequence_id += 1
 	return result
 
-def get_allele_sequences_from_file(file_path):
+def get_isoform_sequences_from_file(file_path):
 	"""
-	Gets all allele sequences
+	Gets all isoform sequences
 
 	Args:
-		file_path: Path to allele fasta
+		file_path: Path to isoform fasta
 
 	Returns:
 		Dictionary of id -> sequence
@@ -222,25 +222,25 @@ def get_allele_sequences_from_file(file_path):
 		result[int(name)] = sequence
 	return result
 
-def get_allele_sequences_per_transcript(base_path):
+def get_isoform_sequences_per_transcript(base_path):
 	"""
-	Gets all allele sequences stratified by transcript
+	Gets all isoform sequences stratified by transcript
 
 	Args:
 		base_path: Path to database folder. Type should be pathlib.Path
 
 	Returns:
-		Dictionary of transcript -> [list of (allele_sequence, frequency)]
+		Dictionary of transcript -> [list of (isoform_sequence, frequency)]
 	"""
 
-	allele_sequences = get_allele_sequences_from_file(str(base_path / "alleles.fa"))
+	isoform_sequences = get_isoform_sequences_from_file(str(base_path / "isoforms.fa"))
 
 	with sqlite3.connect(str(base_path / "sample_info.db")) as connection:
 		cursor = connection.cursor()
 		result = {}
-		for transcript, sequenceID, count in cursor.execute("SELECT Transcript.Name, Allele.SequenceId, COUNT(*) FROM SampleProtein INNER JOIN Allele ON SampleProtein.AlleleId=Allele.Id INNER JOIN Transcript ON Allele.TranscriptId=Transcript.Id GROUP BY Transcript.Name, Allele.SequenceID"):
+		for transcript, sequenceID, count in cursor.execute("SELECT Transcript.Name, Isoform.SequenceId, COUNT(*) FROM SampleAllele INNER JOIN Isoform ON SampleAllele.IsoformId=Isoform.Id INNER JOIN Transcript ON Isoform.TranscriptId=Transcript.Id GROUP BY Transcript.Name, Isoform.SequenceID"):
 			if transcript not in result: result[transcript] = []
-			result[transcript].append((allele_sequences[sequenceID], count))
+			result[transcript].append((isoform_sequences[sequenceID], count))
 		return result
 
 def add_sample_to_group(database_path, sample_name, sample_group):
@@ -291,7 +291,7 @@ def get_transcript_gene_chromosome_info(database_path):
 		database_path: Path to sql database file. Type should be pathlib.Path
 
 	Returns:
-		Dict of allele_id -> (gene_common_name, reference_chromosome)
+		Dict of transcript_id -> (gene_common_name, reference_chromosome)
 	"""
 	with sqlite3.connect(str(database_path)) as connection:
 		cursor = connection.cursor()
@@ -300,77 +300,56 @@ def get_transcript_gene_chromosome_info(database_path):
 			result[transcript_name] = (gene_common_name, ref_chrom)
 		return result
 
-def get_alleles_of_transcript(base_path, transcript):
+def get_isoforms_of_transcript(base_path, transcript):
 	"""
-	Gets all alleles of a single transcript
+	Gets all isoforms of a single transcript
 
 	Args:
 		base_path: Path to database folder. Type should be pathlib.Path
 		transcript: Name of transcript
 
 	Returns:
-		List of [(allele_name, allele_sequence, allele_copy_count)]
+		List of [(isoform_name, isoform_sequence, isoform_copy_count)]
 	"""
 	
-	allele_sequences = get_allele_sequences_from_file(str(base_path / "alleles.fa"))
+	isoform_sequences = get_isoform_sequences_from_file(str(base_path / "isoforms.fa"))
 
 	with sqlite3.connect(str(base_path / "sample_info.db")) as connection:
 		cursor = connection.cursor()
 		result = []
-		for name, sequenceID, copycount in cursor.execute("SELECT Allele.Name, Allele.SequenceID, COUNT(*) FROM Allele INNER JOIN Transcript ON Allele.TranscriptId=Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId=Allele.Id WHERE Transcript.Name=? GROUP BY Allele.Name, Allele.SequenceID", (transcript,)):
-			result.append((name, allele_sequences[sequenceID], copycount))
+		for name, sequenceID, copycount in cursor.execute("SELECT Isoform.Name, Isoform.SequenceID, COUNT(*) FROM Isoform INNER JOIN Transcript ON Isoform.TranscriptId=Transcript.Id INNER JOIN SampleAllele ON SampleAllele.IsoformId=Isoform.Id WHERE Transcript.Name=? GROUP BY Isoform.Name, Isoform.SequenceID", (transcript,)):
+			result.append((name, isoform_sequences[sequenceID], copycount))
 		result.sort()
 		return result
 
-def get_alleles_of_all_transcripts(base_path):
+def get_isoforms_of_all_transcripts(base_path):
 	"""
-	Gets all alleles of all transcripts
+	Gets all isoforms of all transcripts
 
 	Args:
 		base_path: Path to database folder. Type should be pathlib.Path
 
 	Returns:
-		List of [(transcript, list of [(allele_name, allele_sequence, allele_copy_count)])]
+		List of [(transcript, list of [(isoform_name, isoform_sequence, isoform_copy_count)])]
 	"""
 
-	allele_sequences = get_allele_sequences_from_file(str(base_path / "alleles.fa"))
+	isoform_sequences = get_isoform_sequences_from_file(str(base_path / "isoforms.fa"))
 
 	with sqlite3.connect(str(base_path / "sample_info.db")) as connection:
 		cursor = connection.cursor()
 		result_per_transcript = {}
-		allele_coverage = {}
-		for alleleid, coverage in cursor.execute("SELECT AlleleId, COUNT(*) FROM SampleProtein GROUP BY AlleleId", ()):
-			allele_coverage[alleleid] = coverage
-		for transcript, name, sequenceID, alleleid in cursor.execute("SELECT Transcript.Name, Allele.Name, Allele.SequenceID, Allele.Id FROM Allele INNER JOIN Transcript ON Allele.TranscriptId=Transcript.Id", ()):
+		isoform_coverage = {}
+		for isoformid, coverage in cursor.execute("SELECT IsoformId, COUNT(*) FROM SampleAllele GROUP BY IsoformId", ()):
+			isoform_coverage[isoformid] = coverage
+		for transcript, name, sequenceID, isoformid in cursor.execute("SELECT Transcript.Name, Isoform.Name, Isoform.SequenceID, Isoform.Id FROM Isoform INNER JOIN Transcript ON Isoform.TranscriptId=Transcript.Id", ()):
 			if transcript not in result_per_transcript: result_per_transcript[transcript] = []
-			result_per_transcript[transcript].append((name, allele_sequences[sequenceID], allele_coverage[alleleid]))
+			result_per_transcript[transcript].append((name, isoform_sequences[sequenceID], isoform_coverage[isoformid]))
 		result = []
-		for transcript, alleles in result_per_transcript.items():
-			alleles.sort()
-			result.append((transcript, alleles))
+		for transcript, isoforms in result_per_transcript.items():
+			isoforms.sort()
+			result.append((transcript, isoforms))
 		result.sort()
 		return result
-
-def get_alleles_unique_to_group(database_path, group_name):
-	"""
-	Gets alleles which are present only in samples of a specific group.
-
-	Args:
-		database_path: Path to sql database file. Type should be pathlib.Path
-		group_name: Name of group
-
-	Returns:
-		Set of (transcript_id, allele_name)
-	"""
-
-	with sqlite3.connect(str(database_path)) as connection:
-		cursor = connection.cursor()
-		alleles_in_group = set()
-		for transcript_id, allele in cursor.execute("SELECT Transcript.Name, Allele.Name FROM Allele INNER JOIN Transcript ON Transcript.Id = Allele.TranscriptId INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId = Sample.Id INNER JOIN SampleGroup ON SampleGroupGroup.SampleId = Sample.Id WHERE SampleGroup.Name=?", (group_name,)).fetchall():
-			alleles_in_group.add(transcript_id, allele)
-		for transcript_id, allele in cursor.execute("SELECT Transcript.Name, Allele.Name FROM Allele INNER JOIN Transcript ON Transcript.Id = Allele.TranscriptId INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId = Sample.Id WHERE Sample.Id NOT IN (SELECT SampleId FROM SampleGroup WHERE Name=?)", (group_name,)).fetchall():
-			if (transcript_id, allele) in alleles_in_group: alleles_in_group.remove((transcript_id, allele))
-		return alleles_in_group
 
 def get_group_sample_counts(database_path, groups):
 	"""
@@ -408,14 +387,14 @@ def get_all_allelesets_per_haplotype(database_path):
 			all_samples.add((sample, haplotype))
 		all_samples = list(all_samples)
 		all_samples.sort()
-		for transcript, sample, haplotype, allele in cursor.execute(f"SELECT Transcript.Name, Sample.Name, Haplotype.Haplotype, Allele.Name FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId=Sample.Id", ()).fetchall():
+		for transcript, sample, haplotype, isoform in cursor.execute(f"SELECT Transcript.Name, Sample.Name, Haplotype.Haplotype, Isoform.Name FROM Transcript INNER JOIN Isoform ON Isoform.TranscriptId = Transcript.Id INNER JOIN SampleAllele ON SampleAllele.IsoformId = Isoform.Id INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId=Sample.Id", ()).fetchall():
 			if transcript not in allelesets_per_sample: allelesets_per_sample[transcript] = {}
 			if (sample, haplotype) not in allelesets_per_sample[transcript]: allelesets_per_sample[transcript][(sample, haplotype)] = []
-			allelesets_per_sample[transcript][(sample, haplotype)].append(allele)
+			allelesets_per_sample[transcript][(sample, haplotype)].append(isoform)
 		for transcript, samples in allelesets_per_sample.items():
 			for (sample, haplotype), alleles in samples.items():
 				alleleset = alleles
-				alleleset.sort(key=lambda x: allele_sort_order(x))
+				alleleset.sort(key=lambda x: isoform_sort_order(x))
 				alleleset = tuple(alleleset)
 				allelesets_per_sample[transcript][(sample, haplotype)] = alleleset
 		result = []
@@ -446,14 +425,14 @@ def get_allelesets_of_one_transcript(database_path, transcript):
 			all_samples.add(sample)
 		all_samples = list(all_samples)
 		all_samples.sort()
-		for transcript, sample, allele in cursor.execute(f"SELECT Transcript.Name, Sample.Name, Allele.Name FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId=Sample.Id WHERE Transcript.Name=?", (transcript,)).fetchall():
+		for transcript, sample, isoform in cursor.execute(f"SELECT Transcript.Name, Sample.Name, Isoform.Name FROM Transcript INNER JOIN Isoform ON Isoform.TranscriptId = Transcript.Id INNER JOIN SampleAllele ON SampleAllele.IsoformId = Isoform.Id INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId=Sample.Id WHERE Transcript.Name=?", (transcript,)).fetchall():
 			if transcript not in allelesets_per_sample: allelesets_per_sample[transcript] = {}
 			if sample not in allelesets_per_sample[transcript]: allelesets_per_sample[transcript][sample] = []
-			allelesets_per_sample[transcript][sample].append(allele)
+			allelesets_per_sample[transcript][sample].append(isoform)
 		for transcript, samples in allelesets_per_sample.items():
 			for sample, alleles in samples.items():
 				alleleset = alleles
-				alleleset.sort(key=lambda x: allele_sort_order(x))
+				alleleset.sort(key=lambda x: isoform_sort_order(x))
 				alleleset = tuple(alleleset)
 				allelesets_per_sample[transcript][sample] = alleleset
 		result = []
@@ -484,14 +463,14 @@ def get_all_allelesets(database_path):
 			all_samples.add(sample)
 		all_samples = list(all_samples)
 		all_samples.sort()
-		for transcript, sample, allele in cursor.execute(f"SELECT Transcript.Name, Sample.Name, Allele.Name FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId=Sample.Id", ()).fetchall():
+		for transcript, sample, isoform in cursor.execute(f"SELECT Transcript.Name, Sample.Name, Isoform.Name FROM Transcript INNER JOIN Isoform ON Isoform.TranscriptId = Transcript.Id INNER JOIN SampleAllele ON SampleAllele.IsoformId = Isoform.Id INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId=Sample.Id", ()).fetchall():
 			if transcript not in allelesets_per_sample: allelesets_per_sample[transcript] = {}
 			if sample not in allelesets_per_sample[transcript]: allelesets_per_sample[transcript][sample] = []
-			allelesets_per_sample[transcript][sample].append(allele)
+			allelesets_per_sample[transcript][sample].append(isoform)
 		for transcript, samples in allelesets_per_sample.items():
 			for sample, alleles in samples.items():
 				alleleset = alleles
-				alleleset.sort(key=lambda x: allele_sort_order(x))
+				alleleset.sort(key=lambda x: isoform_sort_order(x))
 				alleleset = tuple(alleleset)
 				allelesets_per_sample[transcript][sample] = alleleset
 		result = []
@@ -585,14 +564,14 @@ def get_all_transcripts_alleleset_contingency_table_by_group(database_path, grou
 		allelesets_per_sample = {}
 		for transcript, in cursor.execute(f"SELECT Transcript.Name FROM Transcript", ()).fetchall():
 			if transcript not in allelesets_per_sample: allelesets_per_sample[transcript] = {}
-		for transcript, sample, allele in cursor.execute(f"SELECT Transcript.Name, Haplotype.SampleId, Allele.Name FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN SampleGroup ON Haplotype.SampleId=SampleGroup.SampleId WHERE SampleGroup.GroupName IN ({",".join("?" for group in groups)})", tuple(groups)).fetchall():
+		for transcript, sample, isoform in cursor.execute(f"SELECT Transcript.Name, Haplotype.SampleId, Isoform.Name FROM Transcript INNER JOIN Isoform ON Isoform.TranscriptId = Transcript.Id INNER JOIN SampleAllele ON SampleAllele.IsoformId = Isoform.Id INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN SampleGroup ON Haplotype.SampleId=SampleGroup.SampleId WHERE SampleGroup.GroupName IN ({",".join("?" for group in groups)})", tuple(groups)).fetchall():
 			assert transcript in allelesets_per_sample
 			if sample not in allelesets_per_sample[transcript]: allelesets_per_sample[transcript][sample] = []
-			allelesets_per_sample[transcript][sample].append(allele)
+			allelesets_per_sample[transcript][sample].append(isoform)
 		for transcript, samples in allelesets_per_sample.items():
 			for sample, alleles in samples.items():
 				alleleset = alleles
-				alleleset.sort(key=lambda x: allele_sort_order(x))
+				alleleset.sort(key=lambda x: isoform_sort_order(x))
 				alleleset = tuple(alleleset)
 				allelesets_per_sample[transcript][sample] = alleleset
 		counts = {}
@@ -646,12 +625,12 @@ def get_alleleset_contingency_table_by_group(database_path, transcript_name, gro
 			if len(groups_per_sample[sample]) >= 2:
 				raise RuntimeError(f"Samples are shared between groups {", ".join(groups_per_sample[sample])}")
 		allelesets_per_sample = {}
-		for sample, allele in cursor.execute(f"SELECT Haplotype.SampleId, Allele.Name FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN SampleGroup ON Haplotype.SampleId=SampleGroup.SampleId WHERE Transcript.Name = ? AND SampleGroup.GroupName IN ({",".join("?" for group in groups)})", tuple([transcript_name] + groups)).fetchall():
+		for sample, isoform in cursor.execute(f"SELECT Haplotype.SampleId, Isoform.Name FROM Transcript INNER JOIN Isoform ON Isoform.TranscriptId = Transcript.Id INNER JOIN SampleAllele ON SampleAllele.IsoformId = Isoform.Id INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN SampleGroup ON Haplotype.SampleId=SampleGroup.SampleId WHERE Transcript.Name = ? AND SampleGroup.GroupName IN ({",".join("?" for group in groups)})", tuple([transcript_name] + groups)).fetchall():
 			if sample not in allelesets_per_sample: allelesets_per_sample[sample] = []
-			allelesets_per_sample[sample].append(allele)
+			allelesets_per_sample[sample].append(isoform)
 		for sample in allelesets_per_sample:
 			alleleset = allelesets_per_sample[sample]
-			alleleset.sort(key=lambda x: allele_sort_order(x))
+			alleleset.sort(key=lambda x: isoform_sort_order(x))
 			alleleset = tuple(alleleset)
 			allelesets_per_sample[sample] = alleleset
 		counts = {}
@@ -670,10 +649,10 @@ def get_alleleset_contingency_table_by_group(database_path, transcript_name, gro
 		result.sort(key=lambda x: alleleset_sort_order(x[0]))
 		return result
 
-def rename_alleles_by_coverage(database_path):
+def rename_isoforms_by_coverage(database_path):
 	"""
-	Renames the alleles in the database according to their coverage. Each transcript's alleles have their own namespaces, names are ordered A, B, C, ... Z, AA, AB, ... ZZ, AAA, AAB, ...
-	Reference allele gets special name "ref", unless reference has multiple alleles in which case they have no special name
+	Renames the isoforms in the database according to their coverage. Each transcript's isoforms have their own namespaces, names are ordered A, B, C, ... Z, AA, AB, ... ZZ, AAA, AAB, ...
+	Reference isoform gets special name "ref", unless reference has multiple isoforms in which case they have no special name
 
 	Args:
 		database_path: Path to sql database file. Type should be pathlib.Path
@@ -681,35 +660,35 @@ def rename_alleles_by_coverage(database_path):
 
 	with sqlite3.connect(str(database_path)) as connection:
 		cursor = connection.cursor()
-		allele_coverages_per_transcript = {}
-		reference_allele = {}
-		allele_belongs_to_transcript = {}
-		print(f"{datetime.datetime.now().astimezone()}: Get allele to transcript mapping", file=sys.stderr)
-		for transcript, allele in cursor.execute("SELECT TranscriptId, Id FROM Allele"):
-			allele_belongs_to_transcript[allele] = transcript
-		print(f"{datetime.datetime.now().astimezone()}: Get allele coverages", file=sys.stderr)
-		for allele, coverage in cursor.execute("SELECT AlleleId, COUNT(*) FROM SampleProtein GROUP BY AlleleId").fetchall():
-			transcript = allele_belongs_to_transcript[allele]
-			if transcript not in allele_coverages_per_transcript: allele_coverages_per_transcript[transcript] = []
-			allele_coverages_per_transcript[transcript].append((coverage, allele))
-		print(f"{datetime.datetime.now().astimezone()}: Get reference alleles", file=sys.stderr)
-		for transcript, allele in cursor.execute("SELECT DISTINCT TranscriptId, Allele.Id FROM Allele INNER JOIN SampleProtein ON SampleProtein.AlleleId = Allele.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId = Sample.Id WHERE Sample.Name='reference'").fetchall():
-			if transcript not in reference_allele:
-				reference_allele[transcript] = allele
+		isoform_coverages_per_transcript = {}
+		reference_isoform = {}
+		isoform_belongs_to_transcript = {}
+		print(f"{datetime.datetime.now().astimezone()}: Get isoform to transcript mapping", file=sys.stderr)
+		for transcript, isoform in cursor.execute("SELECT TranscriptId, Id FROM Isoform"):
+			isoform_belongs_to_transcript[isoform] = transcript
+		print(f"{datetime.datetime.now().astimezone()}: Get isoform coverages", file=sys.stderr)
+		for isoform, coverage in cursor.execute("SELECT IsoformId, COUNT(*) FROM SampleAllele GROUP BY IsoformId").fetchall():
+			transcript = isoform_belongs_to_transcript[isoform]
+			if transcript not in isoform_coverages_per_transcript: isoform_coverages_per_transcript[transcript] = []
+			isoform_coverages_per_transcript[transcript].append((coverage, isoform))
+		print(f"{datetime.datetime.now().astimezone()}: Get reference isoforms", file=sys.stderr)
+		for transcript, isoform in cursor.execute("SELECT DISTINCT TranscriptId, Isoform.Id FROM Isoform INNER JOIN SampleAllele ON SampleAllele.IsoformId = Isoform.Id INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId = Sample.Id WHERE Sample.Name='reference'").fetchall():
+			if transcript not in reference_isoform:
+				reference_isoform[transcript] = isoform
 			else:
-				reference_allele[transcript] = None
-		print(f"{datetime.datetime.now().astimezone()}: Update reference allele names", file=sys.stderr)
-		for transcript, allele in reference_allele.items():
-			if allele is None: continue
-			cursor.execute("UPDATE Allele SET Name=? WHERE Id=?", ("ref", allele))
-		print(f"{datetime.datetime.now().astimezone()}: Update alt allele names", file=sys.stderr)
-		for transcript, coveragelist in allele_coverages_per_transcript.items():
+				reference_isoform[transcript] = None
+		print(f"{datetime.datetime.now().astimezone()}: Update reference isoform names", file=sys.stderr)
+		for transcript, isoform in reference_isoform.items():
+			if isoform is None: continue
+			cursor.execute("UPDATE Isoform SET Name=? WHERE Id=?", ("ref", isoform))
+		print(f"{datetime.datetime.now().astimezone()}: Update alt isoform names", file=sys.stderr)
+		for transcript, coveragelist in isoform_coverages_per_transcript.items():
 			coveragelist.sort(key=lambda x: (-x[0], x[1]))
 			index = 0
-			for coverage, allele in coveragelist:
-				if allele == reference_allele[transcript]: continue
-				name = get_allele_name(index)
-				cursor.execute("UPDATE Allele SET Name=? WHERE Id=?", (name, allele))
+			for coverage, isoform in coveragelist:
+				if isoform == reference_isoform[transcript]: continue
+				name = get_isoform_name(index)
+				cursor.execute("UPDATE Isoform SET Name=? WHERE Id=?", (name, isoform))
 				index += 1
 		print(f"{datetime.datetime.now().astimezone()}: Commit", file=sys.stderr)
 		connection.commit()
@@ -731,19 +710,19 @@ def initialize_sqlite_db_schema(database_path):
 		CREATE TABLE SampleContig (Id INTEGER PRIMARY KEY NOT NULL, HaplotypeId INTEGER NOT NULL, Length INTEGER NOT NULL, Name TEXT NOT NULL, FOREIGN KEY (HaplotypeId) REFERENCES Haplotype(Id));
 		CREATE TABLE Gene (Id INTEGER PRIMARY KEY NOT NULL, Name TEXT NOT NULL, CommonName TEXT NOT NULL, ReferenceChromosome TEXT NOT NULL, ReferenceLocationStrand TEXT NOT NULL, ReferenceLocationStart INTEGER NOT NULL, ReferenceLocationEnd INTEGER NOT NULL);
 		CREATE TABLE Transcript (Id INTEGER PRIMARY KEY NOT NULL, Name TEXT NOT NULL, GeneId INTEGER NOT NULL, ReferenceChromosome TEXT NOT NULL, ReferenceLocationStrand TEXT NOT NULL, ReferenceLocationStart INTEGER NOT NULL, ReferenceLocationEnd INTEGER NOT NULL, FOREIGN KEY (GeneId) REFERENCES Gene(Id));
-		CREATE TABLE Allele (Id INTEGER PRIMARY KEY NOT NULL, TranscriptId INTEGER NOT NULL, SequenceID INTEGER NOT NULL, Name TEXT, FOREIGN KEY (TranscriptId) REFERENCES Transcript(Id));
-		CREATE TABLE SampleProtein (Id INTEGER PRIMARY KEY NOT NULL, HaplotypeId INTEGER NOT NULL, AlleleId INTEGER NOT NULL, SampleContigId INTEGER NOT NULL, SampleLocationStrand TEXT NOT NULL, SampleLocationStart INTEGER NOT NULL, SampleLocationEnd INTEGER NOT NULL, FOREIGN KEY (HaplotypeId) REFERENCES Haplotype(Id), FOREIGN KEY (AlleleId) REFERENCES Allele(Id), FOREIGN KEY (SampleContigId) REFERENCES SampleContig(Id));
+		CREATE TABLE Isoform (Id INTEGER PRIMARY KEY NOT NULL, TranscriptId INTEGER NOT NULL, SequenceID INTEGER NOT NULL, Name TEXT, FOREIGN KEY (TranscriptId) REFERENCES Transcript(Id));
+		CREATE TABLE SampleAllele (Id INTEGER PRIMARY KEY NOT NULL, HaplotypeId INTEGER NOT NULL, IsoformId INTEGER NOT NULL, SampleContigId INTEGER NOT NULL, SampleLocationStrand TEXT NOT NULL, SampleLocationStart INTEGER NOT NULL, SampleLocationEnd INTEGER NOT NULL, FOREIGN KEY (HaplotypeId) REFERENCES Haplotype(Id), FOREIGN KEY (IsoformId) REFERENCES Isoform(Id), FOREIGN KEY (SampleContigId) REFERENCES SampleContig(Id));
 		CREATE TABLE SampleAnnotation (Id INTEGER PRIMARY KEY NOT NULL, SampleId INTEGER NOT NULL, Key TEXT NOT NULL, Value TEXT, FOREIGN KEY (SampleId) REFERENCES Sample(Id));
 		CREATE TABLE GeneAnnotation (Id INTEGER PRIMARY KEY NOT NULL, GeneId INTEGER NOT NULL, Key TEXT NOT NULL, Value TEXT, FOREIGN KEY (GeneId) REFERENCES Gene(Id));
 		CREATE TABLE TranscriptAnnotation (Id INTEGER PRIMARY KEY NOT NULL, TranscriptId INTEGER NOT NULL, Key TEXT NOT NULL, Value TEXT, FOREIGN KEY (TranscriptId) REFERENCES Transcript(Id));
-		CREATE TABLE AlleleAnnotation (Id INTEGER PRIMARY KEY NOT NULL, AlleleId INTEGER NOT NULL, Key TEXT NOT NULL, Value TEXT, FOREIGN KEY (AlleleId) REFERENCES Allele(Id));
+		CREATE TABLE IsoformAnnotation (Id INTEGER PRIMARY KEY NOT NULL, IsoformId INTEGER NOT NULL, Key TEXT NOT NULL, Value TEXT, FOREIGN KEY (IsoformId) REFERENCES Isoform(Id));
 		CREATE INDEX SampleNameIndex ON Sample(Name);
 		CREATE INDEX GeneNameIndex ON Gene(Name);
-		CREATE INDEX AlleleIndex ON Allele(TranscriptId, SequenceID);
-		CREATE INDEX SampleProteinAlleleId ON SampleProtein(AlleleId);
-		CREATE INDEX SampleProteinHaplotypeId ON SampleProtein(HaplotypeId);
+		CREATE INDEX IsoformIndex ON Isoform(TranscriptId, SequenceID);
+		CREATE INDEX SampleAlleleIsoformId ON SampleAllele(IsoformId);
+		CREATE INDEX SampleAlleleHaplotypeId ON SampleAllele(HaplotypeId);
 		CREATE INDEX HaplotypeSampleIdIndex ON Haplotype(SampleId);
-		CREATE INDEX AlleleTranscriptId ON Allele(TranscriptId);
+		CREATE INDEX IsoformTranscriptId ON Isoform(TranscriptId);
 		CREATE INDEX TranscriptNameIndex ON Transcript(Name);
 		CREATE INDEX SampleGroupIndex ON SampleGroup(SampleId, GroupName);
 		CREATE INDEX SampleGroupIdIndex ON SampleGroup(SampleId);
@@ -755,19 +734,19 @@ def initialize_sqlite_db_schema(database_path):
 		cursor.executescript(make_tables_command)
 		connection.commit()
 
-def check_alleles_have_names(database_folder):
+def check_isoforms_have_names(database_folder):
 	"""
-	Checks that all alleles have names
+	Checks that all isoforms have names
 
 	Args:
 		database_folder: Path to database folder. Type should be pathlib.Path
 
 	Returns:
-		True if all alleles have names, False otherwise
+		True if all isoforms have names, False otherwise
 	"""
 	with sqlite3.connect(str(database_folder + "/sample_info.db")) as connection:
 		cursor = connection.cursor()
-		any_unnamed = cursor.execute("SELECT Id FROM Allele WHERE Name IS NULL LIMIT 1").fetchall()
+		any_unnamed = cursor.execute("SELECT Id FROM Isoform WHERE Name IS NULL LIMIT 1").fetchall()
 		if len(any_unnamed) > 0: return False
 	return True
 
@@ -828,8 +807,8 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 		liftoff_info = subprocess.run([liftoff_path, "--version"], capture_output=True, text=True)
 		print(f"Liftoff version: {str(liftoff_info.stdout)}", file=f)
 
-	with open(folder / "alleles.fa", "w") as f:
-		# just touch the allele file to create it
+	with open(folder / "isoforms.fa", "w") as f:
+		# just touch the isoform file to create it
 		pass
 
 	tmp_folder = folder / "tmp"

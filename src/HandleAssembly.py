@@ -32,7 +32,7 @@ def prepare_fasta(input_path, output_path):
 
 def compare_samples_to_database(base_folder, sample_table_file, num_threads, liftoff_path):
 	"""
-	Compares multiple new samples to the database. Runs liftoff if necessary and gets transcripts, finds novel alleles and allele sets, and sample allele sets. Creates a temp folder with all temp files which is deleted in the end.
+	Compares multiple new samples to the database. Runs liftoff if necessary and gets transcripts, finds novel isoforms and allele sets, and sample allele sets. Creates a temp folder with all temp files which is deleted in the end.
 
 	Args:
 		base_folder: Folder where database files are located. Type should be pathlib.Path
@@ -41,8 +41,8 @@ def compare_samples_to_database(base_folder, sample_table_file, num_threads, lif
 		liftoff_path: Path to liftoff executable
 
 	Returns:
-		tuple of (novel_alleles, novel_allelesets, sample_allelesets)
-		Format of novel_alleles is [(transcript, allele_name, allele_sequence)]
+		tuple of (novel_isoforms, novel_allelesets, sample_allelesets)
+		Format of novel_isoforms is [(transcript, isoform_name, isoform_sequence)]
 		Format of novel_allelesets is [(transcript, sample, alleleset)]
 		Format of sample_allelesets is [(transcript, sample, alleleset)]
 	"""
@@ -80,7 +80,7 @@ def compare_samples_to_database(base_folder, sample_table_file, num_threads, lif
 				os.makedirs(tmp_folder, exist_ok=False)
 				handle_new_sample_liftoff_use_tmp_folder(base_folder, tmp_folder, sample_annotation_file, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path)
 				sample_info_with_annotations.append((sample_name, sample_haplotype, tmp_folder / (sample_name + "_" + sample_haplotype + ".fa"), sample_annotation_file))
-		result = get_novel_alleles_allelesets(base_folder, sample_info_with_annotations, num_threads)
+		result = get_novel_isoforms_allelesets(base_folder, sample_info_with_annotations, num_threads)
 	finally:
 		shutil.rmtree(tmp_base_folder)
 	return result
@@ -137,9 +137,9 @@ def get_sample_transcripts_and_contig_lens(sample_info, num_threads):
 		assert all_sample_contig_lens[i] is not None
 	return all_processed_transcripts, all_sample_contig_lens
 
-def get_novel_alleles_allelesets(base_folder, sample_info, num_threads):
+def get_novel_isoforms_allelesets(base_folder, sample_info, num_threads):
 	"""
-	Gets the novel alleles of samples, novel allelesets, and all sample allelesets. Assumes that liftoff has already been ran
+	Gets the novel isoforms of samples, novel allelesets, and all sample allelesets. Assumes that liftoff has already been ran
 
 	Args:
 		base_folder: Base folder
@@ -147,8 +147,8 @@ def get_novel_alleles_allelesets(base_folder, sample_info, num_threads):
 		num_threads: Number of threads to use. Processing each sample uses one thread but multiple samples can be processed in parallel
 
 	Returns:
-		tuple of (novel_alleles, novel_allelesets, sample_allelesets)
-		Format of novel_alleles is [(transcript, allele_name, allele_sequence)]
+		tuple of (novel_isoforms, novel_allelesets, sample_allelesets)
+		Format of novel_isoforms is [(transcript, isoform_name, isoform_sequence)]
 		Format of novel_allelesets is [(transcript, sample, alleleset)]
 		Format of sample_allelesets is [(transcript, sample, alleleset)]
 	"""
@@ -156,9 +156,9 @@ def get_novel_alleles_allelesets(base_folder, sample_info, num_threads):
 	all_processed_transcripts, all_sample_contig_lens = get_sample_transcripts_and_contig_lens(sample_info, num_threads)
 	print(f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	transcript_id_map = {}
-	allele_name_map = {}
-	allele_sequences = DatabaseOperations.get_allele_sequences_from_file(str(base_folder / "alleles.fa"))
-	novel_alleles = set()
+	isoform_name_map = {}
+	isoform_sequences = DatabaseOperations.get_isoform_sequences_from_file(str(base_folder / "isoforms.fa"))
+	novel_isoforms = set()
 	next_novel_per_transcript = {}
 	novel_sample_transcript_alleles = {}
 	all_transcripts = set()
@@ -167,29 +167,29 @@ def get_novel_alleles_allelesets(base_folder, sample_info, num_threads):
 		cursor.arraysize = 10000
 		for db_id, transcript_id in cursor.execute("SELECT Id, Name FROM Transcript").fetchall():
 			transcript_id_map[transcript_id] = db_id
-		for allele_name, transcript_id, transcript_sequence_id in cursor.execute("SELECT Name, TranscriptId, SequenceId FROM Allele").fetchall():
-			allele_name_map[(transcript_id, allele_sequences[transcript_sequence_id])] = allele_name
+		for isoform_name, transcript_id, transcript_sequence_id in cursor.execute("SELECT Name, TranscriptId, SequenceId FROM Isoform").fetchall():
+			isoform_name_map[(transcript_id, isoform_sequences[transcript_sequence_id])] = isoform_name
 		for sampleindex in range(0, len(sample_info)):
 			sample_name = sample_info[sampleindex][0]
 			processed_transcripts = all_processed_transcripts[sampleindex]
 			for (transcript_id, sequence, location) in processed_transcripts:
 				transcript_db_id = transcript_id_map[transcript_id]
-				if (transcript_db_id, sequence) not in allele_name_map:
+				if (transcript_db_id, sequence) not in isoform_name_map:
 					if transcript_db_id not in next_novel_per_transcript: next_novel_per_transcript[transcript_db_id] = 0
-					novel_name = "novel_" + DatabaseOperations.get_allele_name(next_novel_per_transcript[transcript_db_id])
-					novel_alleles.add((transcript_id, novel_name, sequence))
-					allele_name_map[transcript_db_id, sequence] = novel_name
+					novel_name = "novel_" + DatabaseOperations.get_isoform_name(next_novel_per_transcript[transcript_db_id])
+					novel_isoforms.add((transcript_id, novel_name, sequence))
+					isoform_name_map[transcript_db_id, sequence] = novel_name
 					next_novel_per_transcript[transcript_db_id] += 1
-				allele_name = allele_name_map[transcript_db_id, sequence]
+				isoform_name = isoform_name_map[transcript_db_id, sequence]
 				if sample_name not in novel_sample_transcript_alleles: novel_sample_transcript_alleles[sample_name] = {}
 				if transcript_id not in novel_sample_transcript_alleles[sample_name]: novel_sample_transcript_alleles[sample_name][transcript_id] = []
-				novel_sample_transcript_alleles[sample_name][transcript_id].append(allele_name)
+				novel_sample_transcript_alleles[sample_name][transcript_id].append(isoform_name)
 	for sample in novel_sample_transcript_alleles:
 		for transcript in transcript_id_map:
 			alleleset = ()
 			if transcript in novel_sample_transcript_alleles[sample]:
 				novel_sample_transcript_alleles[sample][transcript] = list(novel_sample_transcript_alleles[sample][transcript])
-				novel_sample_transcript_alleles[sample][transcript].sort(key=lambda x: DatabaseOperations.allele_sort_order(x))
+				novel_sample_transcript_alleles[sample][transcript].sort(key=lambda x: DatabaseOperations.isoform_sort_order(x))
 				alleleset = tuple(novel_sample_transcript_alleles[sample][transcript])
 			novel_sample_transcript_alleles[sample][transcript] = alleleset
 		for transcript_id in transcript_id_map:
@@ -201,15 +201,15 @@ def get_novel_alleles_allelesets(base_folder, sample_info, num_threads):
 		cursor = connection.cursor()
 		cursor.arraysize = 10000
 		sample_transcript_alleles = {}
-		for allele_name, transcript, sample_name in cursor.execute("SELECT Allele.Name, Transcript.Name, Sample.Name FROM SampleProtein INNER JOIN Allele ON SampleProtein.AlleleId = Allele.Id INNER JOIN Transcript ON Allele.TranscriptId = Transcript.Id INNER JOIN Haplotype ON SampleProtein.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Sample.Id = Haplotype.SampleId"):
+		for isoform_name, transcript, sample_name in cursor.execute("SELECT Isoform.Name, Transcript.Name, Sample.Name FROM SampleAllele INNER JOIN Isoform ON SampleAllele.IsoformId = Isoform.Id INNER JOIN Transcript ON Isoform.TranscriptId = Transcript.Id INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Sample.Id = Haplotype.SampleId"):
 			if sample_name not in sample_transcript_alleles: sample_transcript_alleles[sample_name] = {}
 			if transcript not in sample_transcript_alleles[sample_name]: sample_transcript_alleles[sample_name][transcript] = []
-			sample_transcript_alleles[sample_name][transcript].append(allele_name)
+			sample_transcript_alleles[sample_name][transcript].append(isoform_name)
 		for sample in sample_transcript_alleles:
 			for transcript in transcript_id_map:
 				alleleset = ()
 				if transcript in sample_transcript_alleles[sample]:
-					sample_transcript_alleles[sample][transcript].sort(key=lambda x: DatabaseOperations.allele_sort_order(x))
+					sample_transcript_alleles[sample][transcript].sort(key=lambda x: DatabaseOperations.isoform_sort_order(x))
 					alleleset = tuple(sample_transcript_alleles[sample][transcript])
 				if transcript not in existing_allelesets: existing_allelesets[transcript] = set()
 				existing_allelesets[transcript].add(alleleset)
@@ -220,11 +220,11 @@ def get_novel_alleles_allelesets(base_folder, sample_info, num_threads):
 			if novel_sample_transcript_alleles[sample][transcript] not in existing_allelesets[transcript]:
 				novel_allelesets.append((transcript, sample, novel_sample_transcript_alleles[sample][transcript]))
 			all_sample_allelesets.append((transcript, sample, novel_sample_transcript_alleles[sample][transcript]))
-	novel_alleles = list(novel_alleles)
-	novel_alleles.sort(key=lambda x: (x[0], x[1], DatabaseOperations.allele_sort_order(x[2])))
+	novel_isoforms = list(novel_isoforms)
+	novel_isoforms.sort(key=lambda x: (x[0], x[1], DatabaseOperations.isoform_sort_order(x[2])))
 	novel_allelesets.sort(key=lambda x: (x[0], x[1], DatabaseOperations.alleleset_sort_order(x[2])))
 	all_sample_allelesets.sort(key=lambda x: (x[0], x[1], DatabaseOperations.alleleset_sort_order(x[2])))
-	return (novel_alleles, novel_allelesets, all_sample_allelesets)
+	return (novel_isoforms, novel_allelesets, all_sample_allelesets)
 
 def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threads):
 	"""
@@ -239,11 +239,11 @@ def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threa
 	all_processed_transcripts, all_sample_contig_lens = get_sample_transcripts_and_contig_lens(sample_info, num_threads)
 	print(f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	transcript_id_map = {}
-	allele_name_map = {}
+	isoform_name_map = {}
 	sample_contig_db_ids = []
 	all_haplotype_ids = []
-	allele_sequences = DatabaseOperations.get_allele_sequences_from_file(str(base_folder / "alleles.fa"))
-	novel_alleles = set()
+	isoform_sequences = DatabaseOperations.get_isoform_sequences_from_file(str(base_folder / "isoforms.fa"))
+	novel_isoforms = set()
 	with sqlite3.connect(str(base_folder / "sample_info.db")) as connection:
 		cursor = connection.cursor()
 		cursor.arraysize = 10000
@@ -251,8 +251,8 @@ def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threa
 		for db_id, transcript_id in cursor.execute("SELECT Id, Name FROM Transcript").fetchall():
 			transcript_id_map[transcript_id] = db_id
 		print(f"step 4 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		for allele_id, transcript_id, transcript_sequence_id in cursor.execute("SELECT Id, TranscriptId, SequenceId FROM Allele").fetchall():
-			allele_name_map[(transcript_id, allele_sequences[transcript_sequence_id])] = allele_id
+		for isoform_id, transcript_id, transcript_sequence_id in cursor.execute("SELECT Id, TranscriptId, SequenceId FROM Isoform").fetchall():
+			isoform_name_map[(transcript_id, isoform_sequences[transcript_sequence_id])] = isoform_id
 		print(f"step 5 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		for sampleindex in range(0, len(sample_info)):
 			sample_name = sample_info[sampleindex][0]
@@ -283,25 +283,25 @@ def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threa
 			print(f"step 11 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 			for (transcript_id, sequence, location) in processed_transcripts:
 				transcript_db_id = transcript_id_map[transcript_id]
-				if (transcript_db_id, sequence) not in allele_name_map: novel_alleles.add((transcript_db_id, sequence))
+				if (transcript_db_id, sequence) not in isoform_name_map: novel_isoforms.add((transcript_db_id, sequence))
 		print(f"step 12 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		if len(novel_alleles) >= 1:
-			inserted_alleles = DatabaseOperations.add_alleles_to_fasta(base_folder / "alleles.fa", novel_alleles)
+		if len(novel_isoforms) >= 1:
+			inserted_isoforms = DatabaseOperations.add_isoforms_to_fasta(base_folder / "isoforms.fa", novel_isoforms)
 			print(f"step 13 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-			cursor.executemany("INSERT INTO Allele (TranscriptId, SequenceId) VALUES (?, ?)", inserted_alleles)
+			cursor.executemany("INSERT INTO isoform (TranscriptId, SequenceId) VALUES (?, ?)", inserted_isoforms)
 			print(f"step 13.5 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-			allele_sequences = DatabaseOperations.get_allele_sequences_from_file(str(base_folder / "alleles.fa"))
+			isoform_sequences = DatabaseOperations.get_isoform_sequences_from_file(str(base_folder / "isoforms.fa"))
 			print(f"step 14 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-			for allele_id, transcript_id, transcript_sequence_id in cursor.execute("SELECT Allele.Id, Transcript.Id, Allele.SequenceId FROM Transcript INNER JOIN Allele ON Allele.TranscriptId = Transcript.Id").fetchall():
-				allele_name_map[(transcript_id, allele_sequences[transcript_sequence_id])] = allele_id
+			for isoform_id, transcript_id, transcript_sequence_id in cursor.execute("SELECT isoform.Id, Transcript.Id, isoform.SequenceId FROM Transcript INNER JOIN isoform ON isoform.TranscriptId = Transcript.Id").fetchall():
+				isoform_name_map[(transcript_id, isoform_sequences[transcript_sequence_id])] = isoform_id
 		print(f"step 15 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		insert_lines = []
 		for sampleindex in range(0, len(sample_info)):
 			processed_transcripts = all_processed_transcripts[sampleindex]
 			for transcript_id, sequence, location in processed_transcripts:
-				insert_lines.append((all_haplotype_ids[sampleindex], allele_name_map[(transcript_id_map[transcript_id], sequence)], sample_contig_db_ids[sampleindex][location[0]], location[1], location[2], location[3]))
+				insert_lines.append((all_haplotype_ids[sampleindex], isoform_name_map[(transcript_id_map[transcript_id], sequence)], sample_contig_db_ids[sampleindex][location[0]], location[1], location[2], location[3]))
 		print(f"step 16 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-		cursor.executemany("INSERT INTO SampleProtein (HaplotypeId, AlleleId, SampleContigId, SampleLocationStrand, SampleLocationStart, SampleLocationEnd) VALUES (?, ?, ?, ?, ?, ?)", insert_lines)
+		cursor.executemany("INSERT INTO SampleAllele (HaplotypeId, IsoformId, SampleContigId, SampleLocationStrand, SampleLocationStart, SampleLocationEnd) VALUES (?, ?, ?, ?, ?, ?)", insert_lines)
 		print(f"step 17 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		connection.commit()
 		print(f"step 18 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
@@ -631,11 +631,11 @@ def check_if_sample_sex_chromosome_annotations_are_fine(database_file, sample_na
 	select_command = \
 	"""
 		SELECT DISTINCT Gene.ReferenceChromosome, Haplotype.Haplotype
-		FROM SampleProtein
-		INNER JOIN Allele ON Allele.Id = SampleProtein.AlleleId
-		INNER JOIN Transcript ON Transcript.Id = Allele.TranscriptId
+		FROM SampleAllele
+		INNER JOIN Isoform ON Isoform.Id = SampleAllele.IsoformId
+		INNER JOIN Transcript ON Transcript.Id = Isoform.TranscriptId
 		INNER JOIN Gene ON Gene.Id = Transcript.GeneId
-		INNER JOIN Haplotype ON Haplotype.Id = SampleProtein.HaplotypeId
+		INNER JOIN Haplotype ON Haplotype.Id = SampleAllele.HaplotypeId
 		INNER JOIN Sample ON Haplotype.SampleId = Sample.Id
 		WHERE Sample.Name=?
 	"""

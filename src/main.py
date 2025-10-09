@@ -98,7 +98,7 @@ def remove_group(args):
 def update_names(args):
 	print("Input parameters:", file=sys.stderr)
 	print(f"-r {args.database}", file=sys.stderr)
-	DatabaseOperations.rename_alleles_by_coverage(pathlib.Path(args.database) / "sample_info.db")
+	DatabaseOperations.rename_isoforms_by_coverage(pathlib.Path(args.database) / "sample_info.db")
 
 def contingency_table(args):
 	groups = []
@@ -112,8 +112,8 @@ def contingency_table(args):
 	print(f"--group {", ".join(groups)}", file=sys.stderr)
 	print(f"--table {args.table}", file=sys.stderr)
 	print(f"--include-gene-info {args.include_gene_info}", file=sys.stderr)
-	if not DatabaseOperations.check_alleles_have_names(args.database):
-		print("Error: Some alleles do not have names. Please run the renamealleles command.", file=sys.stderr)
+	if not DatabaseOperations.check_isoforms_have_names(args.database):
+		print("Error: Some isoforms do not have names. Please run the rename command.", file=sys.stderr)
 		exit(1)
 	if len(groups) < 2 and args.table is None:
 		print("Either sample table (--sample) or at least two groups (--group) are required", file=sys.stderr)
@@ -141,27 +141,27 @@ def contingency_table(args):
 				else:
 					print(f"{transcript}\t{line[0]}\t{"\t".join(str(c) for c in line[1])}", file=f)
 
-def export_alleles(args):
+def export_isoforms(args):
 	print("Input parameters:", file=sys.stderr)
 	print(f"-db {args.database}", file=sys.stderr)
 	print(f"-o {args.output}", file=sys.stderr)
 	print(f"--transcript {args.transcript}", file=sys.stderr)
 	print(f"--include-gene-info {args.include_gene_info}", file=sys.stderr)
-	if not DatabaseOperations.check_alleles_have_names(args.database):
-		print("Error: Some alleles do not have names. Please run the renamealleles command.", file=sys.stderr)
+	if not DatabaseOperations.check_isoforms_have_names(args.database):
+		print("Error: Some isoforms do not have names. Please run the rename command.", file=sys.stderr)
 		exit(1)
 	if args.transcript:
-		result = DatabaseOperations.get_alleles_of_transcript(pathlib.Path(args.database), args.transcript)
+		result = DatabaseOperations.get_isoforms_of_transcript(pathlib.Path(args.database), args.transcript)
 		result = [(args.transcript, result)]
 	else:
-		result = DatabaseOperations.get_alleles_of_all_transcripts(pathlib.Path(args.database))
+		result = DatabaseOperations.get_isoforms_of_all_transcripts(pathlib.Path(args.database))
 	if args.include_gene_info:
 		transcript_gene_info = DatabaseOperations.get_transcript_gene_chromosome_info(pathlib.Path(args.database) / "sample_info.db")
 	with open_file_or_stdout(args.output) as f:
 		if args.include_gene_info:
-			print(f"Chromosome\tGene\tTranscript\tAllele\tCount\tSequence", file=f)
+			print(f"Chromosome\tGene\tTranscript\tIsoform\tCount\tSequence", file=f)
 		else:
-			print(f"Transcript\tAllele\tCount\tSequence", file=f)
+			print(f"Transcript\tIsoform\tCount\tSequence", file=f)
 		for transcript, lines in result:
 			for name, sequence, count in lines:
 				if args.include_gene_info:
@@ -175,8 +175,8 @@ def export_allelesets(args):
 	print(f"-o {args.output}", file=sys.stderr)
 	print(f"--transcript {args.transcript}", file=sys.stderr)
 	print(f"--include-gene-info {args.include_gene_info}", file=sys.stderr)
-	if not DatabaseOperations.check_alleles_have_names(args.database):
-		print("Error: Some alleles do not have names. Please run the renamealleles command.", file=sys.stderr)
+	if not DatabaseOperations.check_isoforms_have_names(args.database):
+		print("Error: Some isoforms do not have names. Please run the rename command.", file=sys.stderr)
 		exit(1)
 	if args.transcript:
 		result = DatabaseOperations.get_allelesets_of_one_transcript(pathlib.Path(args.database) / "sample_info.db", args.transcript)
@@ -208,8 +208,8 @@ def chi_square(args):
 	print(f"--group {", ".join(groups)}", file=sys.stderr)
 	print(f"--table {args.table}", file=sys.stderr)
 	print(f"--include-gene-info {args.include_gene_info}", file=sys.stderr)
-	if not DatabaseOperations.check_alleles_have_names(args.database):
-		print("Error: Some alleles do not have names. Please run the renamealleles command.", file=sys.stderr)
+	if not DatabaseOperations.check_isoforms_have_names(args.database):
+		print("Error: Some isoforms do not have names. Please run the rename command.", file=sys.stderr)
 		exit(1)
 	if len(groups) < 2 and args.table is None:
 		print("Either sample table (--sample) or at least two groups (--group) are required", file=sys.stderr)
@@ -246,8 +246,8 @@ def validate(args):
 	print("Input parameters:", file=sys.stderr)
 	print(f"-db {args.database}", file=sys.stderr)
 	errors = DatabaseOperations.check_if_haplotypes_are_fine(pathlib.Path(args.database) / "sample_info.db")
-	if not DatabaseOperations.check_alleles_have_names(args.database):
-		errors.append("Some alleles do not have names. Please run the renamealleles command.", file=sys.stderr)
+	if not DatabaseOperations.check_isoforms_have_names(args.database):
+		errors.append("Some isoforms do not have names. Please run the rename command.", file=sys.stderr)
 	if len(errors) == 0:
 		print("No validation errors found, everything appears good.", file=sys.stderr)
 	else:
@@ -272,11 +272,14 @@ def compare_novel(args):
 	print(f"-t {args.threads}", file=sys.stderr)
 	print(f"-o {args.output}", file=sys.stderr)
 	print(f"--liftoff {args.liftoff}", file=sys.stderr)
+	if not DatabaseOperations.check_isoforms_have_names(args.database):
+		print("Error: Some isoforms do not have names. Please run the rename command.", file=sys.stderr)
+		exit(1)
 	transcript_gene_info = DatabaseOperations.get_transcript_gene_chromosome_info(pathlib.Path(args.database) / "sample_info.db")
-	novel_alleles, novel_allelesets, sample_allelesets = HandleAssembly.compare_samples_to_database(pathlib.Path(args.database), args.table, int(args.threads), args.liftoff)
-	with open(args.output + "_novel_alleles.tsv", "w") as f:
+	novel_isoforms, novel_allelesets, sample_allelesets = HandleAssembly.compare_samples_to_database(pathlib.Path(args.database), args.table, int(args.threads), args.liftoff)
+	with open(args.output + "_novel_isoforms.tsv", "w") as f:
 		print(f"Chromosome\tGene\tTranscript\tName\tSequence", file=f)
-		for transcript, name, sequence in novel_alleles:
+		for transcript, name, sequence in novel_isoforms:
 			print(f"{transcript_gene_info[transcript][1]}\t{transcript_gene_info[transcript][0]}\t{transcript}\t{name}\t{sequence}", file=f)
 	with open(args.output + "_novel_allelesets.tsv", "w") as f:
 		print(f"Chromosome\tGene\tTranscript\tSample\tAlleleset", file=f)
@@ -301,7 +304,7 @@ if __name__ == "__main__":
 	create_db_parser.set_defaults(func=create_db)
 
 	add_sample_parser = subparsers.add_parser("addsample", description="Add a new sample")
-	add_sample_parser.add_argument('-i', '--input', required=True, help='Sample sequence file (required)')
+	add_sample_parser.add_argument('-i', '--input', required=True, help='Sequence file (required)')
 	add_sample_parser.add_argument('--name', required=True, help='Sample name')
 	add_sample_parser.add_argument('--haplotype', required=True, help='Sample haplotype')
 	add_sample_parser.add_argument('-db', '--database', required=True, help='Database folder')
@@ -310,8 +313,8 @@ if __name__ == "__main__":
 	add_sample_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
 	add_sample_parser.set_defaults(func=add_sample)
 
-	run_liftoff_parser = subparsers.add_parser("liftoff", description="Run liftoff for one haplotype")
-	run_liftoff_parser.add_argument('-i', '--input', required=True, help='Sample sequence file (required)')
+	run_liftoff_parser = subparsers.add_parser("liftover", description="Lift over annotations to one haplotype")
+	run_liftoff_parser.add_argument('-i', '--input', required=True, help='Haplotype sequence file (required)')
 	run_liftoff_parser.add_argument('-o', '--output', required=True, help='Output annotation file')
 	run_liftoff_parser.add_argument('-db', '--database', required=True, help='Database folder')
 	run_liftoff_parser.add_argument('--liftoff', default="liftoff", help="Path to liftoff")
@@ -348,7 +351,7 @@ if __name__ == "__main__":
 	list_group_parser.add_argument('-o', '--output', default="-", help='Output file (- for stdout) (default -)')
 	list_group_parser.set_defaults(func=list_groups)
 
-	update_names_parser = subparsers.add_parser("renamealleles", description="Rename alleles according to coverage")
+	update_names_parser = subparsers.add_parser("rename", description="Rename isoforms according to coverage")
 	update_names_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	update_names_parser.set_defaults(func=update_names)
 
@@ -385,12 +388,12 @@ if __name__ == "__main__":
 	export_allelesets_parser.add_argument('--include-gene-info', action="store_true", help='Include information about gene in the output table.')
 	export_allelesets_parser.set_defaults(func=export_allelesets)
 
-	export_alleles_parser = subparsers.add_parser("exportalleles", description="Export allele table")
-	export_alleles_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
-	export_alleles_parser.add_argument('--transcript', help='Name of transcript. If no transcript is given, all transcripts will be used.')
-	export_alleles_parser.add_argument('-o', '--output', default="-", help='Output file (- for stdout) (default -)')
-	export_alleles_parser.add_argument('--include-gene-info', action="store_true", help='Include information about gene in the output table.')
-	export_alleles_parser.set_defaults(func=export_alleles)
+	export_isoforms_parser = subparsers.add_parser("exportisoforms", description="Export isoform table")
+	export_isoforms_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
+	export_isoforms_parser.add_argument('--transcript', help='Name of transcript. If no transcript is given, all transcripts will be used.')
+	export_isoforms_parser.add_argument('-o', '--output', default="-", help='Output file (- for stdout) (default -)')
+	export_isoforms_parser.add_argument('--include-gene-info', action="store_true", help='Include information about gene in the output table.')
+	export_isoforms_parser.set_defaults(func=export_isoforms)
 
 	compare_novel_parser = subparsers.add_parser("comparesamples", description="Compare samples to database")
 	compare_novel_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
