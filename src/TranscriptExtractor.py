@@ -16,13 +16,13 @@ def translate_dna(dna_seq: str) -> str:
 	
 	- Stop codons are marked as 'X'.
 	- Translation continues through all codons.
-	- Trailing 1 or 2 leftover bases are marked as "+1" or "+2" at the end of the result.
+	- Trailing 1 or 2 leftover bases are marked as "+[acgt]" at the end of the result.
 	
 	Args:
 		dna_seq: DNA sequence (upper/lowercase allowed)
 	
 	Returns:
-		Amino acid sequence as string, with "+1" or "+2" if trailing bases exist
+		Amino acid sequence as string, with "+[acgt]" if trailing bases exist
 	"""
 
 	# https://en.wikipedia.org/wiki/DNA_and_RNA_codon_tables
@@ -63,7 +63,7 @@ def translate_dna(dna_seq: str) -> str:
 	protein = ''.join(protein_seq)
 
 	if leftovers:
-		protein += f"+{leftovers}"
+		protein += f"+{dna_seq[-leftovers:].lower()}"
 
 	return protein
 
