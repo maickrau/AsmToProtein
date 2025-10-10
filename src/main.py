@@ -291,7 +291,7 @@ def compare_novel(args):
 			print(f"{transcript_gene_info[transcript][1]}\t{transcript_gene_info[transcript][0]}\t{transcript}\t{name}\t{Util.get_alleleset_name(alleleset)}", file=f)
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(prog="AsmToProtein", description="Protein isoform analysis from de novo genome assemblies.")
+	parser = argparse.ArgumentParser(prog="IsoformCheck", description="Protein isoform analysis from de novo genome assemblies.")
 	subparsers = parser.add_subparsers(dest="subparser_name")
 
 	create_db_parser = subparsers.add_parser("initialize", description="Create new database")
