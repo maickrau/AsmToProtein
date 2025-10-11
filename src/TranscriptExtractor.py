@@ -110,11 +110,11 @@ def process_sample_transcripts_and_contigs(input_file, lifted_gff):
 		lifted_gff: Path to the sample lifted gff3 file.
 
 	Returns:
-		Tuple of (sample_transcripts, gene_locations, transcript_locations, contig_lengths)
-		Sample_transcripts is List[Tuple[transcript_id, transcript_aminoacid_sequence, extra_copy_number]]
+		Tuple of (sample_transcripts, gene_locations, contig_lengths)
+		Sample_transcripts is List[Tuple[transcript_id, transcript_aminoacid_sequence, extra_copy_number, transcript_location]]
 		Gene_locations is dict of (id -> (contig, strand, start, end))
-		Transcript_locations is dict of (id -> (contig, strand, start, end))
 		Contig_lengths is dict of (contig -> length)
+		transcript_location is tuple of (sample_contig, strand, start, end)
 	"""
 	import os
 	import sys
@@ -127,12 +127,10 @@ def process_sample_transcripts_and_contigs(input_file, lifted_gff):
 	print(f"{datetime.datetime.now().astimezone()}: Reading annotation of sample.", file=sys.stderr)
 	(transcripts, gene_locations) = Gff3Parser.parse_gff3_transcripts_with_exons(lifted_gff)
 	transcript_locations = {}
-	for transcript in transcripts:
-		transcript_locations[transcript["transcript_id"]] = (transcript["contig"], transcript["strand"], transcript["start"], transcript["end"])
-
 	transcripts_per_contig = {}
 	for transcript in transcripts:
 		contig = transcript["contig"]
+		transcript_locations[transcript["transcript_id"]] = (contig, transcript["strand"], transcript["start"], transcript["end"])
 		if contig not in transcripts_per_contig: transcripts_per_contig[contig] = []
 		transcripts_per_contig[contig].append(transcript)
 
@@ -151,6 +149,6 @@ def process_sample_transcripts_and_contigs(input_file, lifted_gff):
 			extra_copy_number = tx.get('extra_copy_number', 0)
 			if extra_copy_number != 0:
 				transcript_name = "_".join(transcript_name.split("_")[:-1])
-			transcripts_data.append((transcript_name, seq, extra_copy_number))
+			transcripts_data.append((transcript_name, seq, extra_copy_number, transcript_locations[tx['transcript_id']]))
 
-	return (transcripts_data, gene_locations, transcript_locations, result_contig_lengths)
+	return (transcripts_data, gene_locations, result_contig_lengths)

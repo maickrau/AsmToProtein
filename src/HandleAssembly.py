@@ -106,10 +106,11 @@ def get_sample_transcripts_and_contig_lens(sample_info, num_threads):
 			sample_name, sample_haplotype, sample_fasta, sample_annotation = sample_info[index]
 			print(f"{datetime.datetime.now().astimezone()}: Get transcripts of sample {sample_name} haplotype {sample_haplotype}", file=sys.stderr)
 			result_here = []
-			(sample_transcripts, gene_locations, transcript_locations, contig_lengths) = TranscriptExtractor.process_sample_transcripts_and_contigs(sample_fasta, sample_annotation)
-			for transcript_id, sequence, extra_copy in sample_transcripts:
-				result_here.append((transcript_id, sequence, transcript_locations[transcript_id]))
+			(sample_transcripts, gene_locations, contig_lengths) = TranscriptExtractor.process_sample_transcripts_and_contigs(sample_fasta, sample_annotation)
+			for transcript_id, sequence, extra_copy, location in sample_transcripts:
+				result_here.append((transcript_id, sequence, location))
 			output_transcript_queue.put((index, result_here, contig_lengths))
+			print(f"{datetime.datetime.now().astimezone()}: Got transcripts of sample {sample_name} haplotype {sample_haplotype}", file=sys.stderr)
 	input_ids = queue.Queue(len(sample_info))
 	output_transcripts = queue.Queue(len(sample_info))
 	for i in range(0, len(sample_info)):
@@ -120,6 +121,7 @@ def get_sample_transcripts_and_contig_lens(sample_info, num_threads):
 		threads[i].start()
 	for i in range(0, num_threads):
 		threads[i].join()
+	print(f"{datetime.datetime.now().astimezone()}: Merging sample transcripts and contig lengths", file=sys.stderr)
 	all_processed_transcripts = []
 	all_sample_contig_lens = []
 	for i in range(0, len(sample_info)):
