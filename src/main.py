@@ -42,7 +42,8 @@ def add_samples(args):
 	print(f"-t {args.threads}", file=sys.stderr)
 	print(f"--liftoff {args.liftoff}", file=sys.stderr)
 	print(f"--agc {args.agc}", file=sys.stderr)
-	HandleAssembly.handle_multiple_new_samples_liftoff_and_transcripts_from_table(pathlib.Path(args.database), args.input, int(args.threads), args.liftoff, args.agc)
+	print(f"--force {args.force}", file=sys.stderr)
+	HandleAssembly.handle_multiple_new_samples_liftoff_and_transcripts_from_table(pathlib.Path(args.database), args.input, int(args.threads), args.liftoff, args.agc, args.force)
 
 def add_sample(args):
 	print("Input parameters:", file=sys.stderr)
@@ -272,11 +273,12 @@ def compare_novel(args):
 	print(f"-t {args.threads}", file=sys.stderr)
 	print(f"-o {args.output}", file=sys.stderr)
 	print(f"--liftoff {args.liftoff}", file=sys.stderr)
+	print(f"--force {args.force}", file=sys.stderr)
 	if not DatabaseOperations.check_isoforms_have_names(args.database):
 		print("Error: Some isoforms do not have names. Please run the rename command.", file=sys.stderr)
 		exit(1)
 	transcript_gene_info = DatabaseOperations.get_transcript_gene_chromosome_info(pathlib.Path(args.database) / "sample_info.db")
-	novel_isoforms, novel_allelesets, sample_allelesets = HandleAssembly.compare_samples_to_database(pathlib.Path(args.database), args.table, int(args.threads), args.liftoff)
+	novel_isoforms, novel_allelesets, sample_allelesets = HandleAssembly.compare_samples_to_database(pathlib.Path(args.database), args.table, int(args.threads), args.liftoff, args.force)
 	with open(args.output + "_novel_isoforms.tsv", "w") as f:
 		print(f"Chromosome\tGene\tTranscript\tName\tSequence", file=f)
 		for transcript, name, sequence in novel_isoforms:
@@ -292,6 +294,7 @@ def compare_novel(args):
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(prog="IsoformCheck", description="Protein isoform analysis from de novo genome assemblies.")
+	parser.add_argument('--version', action='version', version="IsoformCheck version " + Util.Version)
 	subparsers = parser.add_subparsers(dest="subparser_name")
 
 	create_db_parser = subparsers.add_parser("initialize", description="Create new database")
@@ -303,6 +306,14 @@ if __name__ == "__main__":
 	create_db_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
 	create_db_parser.set_defaults(func=create_db)
 
+	run_liftoff_parser = subparsers.add_parser("liftover", description="Lift over annotations to one haplotype")
+	run_liftoff_parser.add_argument('-i', '--input', required=True, help='Haplotype sequence file (required)')
+	run_liftoff_parser.add_argument('-o', '--output', required=True, help='Output annotation file')
+	run_liftoff_parser.add_argument('-db', '--database', required=True, help='Database folder')
+	run_liftoff_parser.add_argument('--liftoff', default="liftoff", help="Path to liftoff")
+	run_liftoff_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
+	run_liftoff_parser.set_defaults(func=run_liftoff)
+
 	add_sample_parser = subparsers.add_parser("addsample", description="Add a new sample")
 	add_sample_parser.add_argument('-i', '--input', required=True, help='Sequence file (required)')
 	add_sample_parser.add_argument('--name', required=True, help='Sample name')
@@ -313,20 +324,13 @@ if __name__ == "__main__":
 	add_sample_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
 	add_sample_parser.set_defaults(func=add_sample)
 
-	run_liftoff_parser = subparsers.add_parser("liftover", description="Lift over annotations to one haplotype")
-	run_liftoff_parser.add_argument('-i', '--input', required=True, help='Haplotype sequence file (required)')
-	run_liftoff_parser.add_argument('-o', '--output', required=True, help='Output annotation file')
-	run_liftoff_parser.add_argument('-db', '--database', required=True, help='Database folder')
-	run_liftoff_parser.add_argument('--liftoff', default="liftoff", help="Path to liftoff")
-	run_liftoff_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
-	run_liftoff_parser.set_defaults(func=run_liftoff)
-
 	add_samples_parser = subparsers.add_parser("addsamples", description="Add multiple new samples")
 	add_samples_parser.add_argument('-i', '--input', required=True, help='Sample table file (required)')
 	add_samples_parser.add_argument('-db', '--database', required=True, help='Database folder')
 	add_samples_parser.add_argument('--liftoff', default="liftoff", help="Path to liftoff")
 	add_samples_parser.add_argument('--agc', default="agc", help="Path to agc")
 	add_samples_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
+	add_samples_parser.add_argument('--force', action="store_true", help='Force insert samples even if validation fails')
 	add_samples_parser.set_defaults(func=add_samples)
 
 	list_sample_parser = subparsers.add_parser("listsamples", description="List all samples")
@@ -401,6 +405,7 @@ if __name__ == "__main__":
 	compare_novel_parser.add_argument('-o', '--output', default="result", help='Output prefix (default \"result\")')
 	compare_novel_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
 	compare_novel_parser.add_argument('--liftoff', default="liftoff", help="Path to liftoff")
+	compare_novel_parser.add_argument('--force', action="store_true", help='Force compare samples even if validation fails')
 	compare_novel_parser.set_defaults(func=compare_novel)
 
 	args = parser.parse_args()

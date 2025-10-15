@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import gzip
+import datetime
 import Util
 
 def parse_attributes(attr_string):
@@ -10,6 +11,77 @@ def parse_attributes(attr_string):
 			key, val = attr.split('=', 1)
 			attrs[key] = val
 	return attrs
+
+def read_gff3_as_bytes_add_isoformcheck_version_to_start(input_gff3_path, filtered_refannotation_hash):
+	"""
+	Reads a gff3 file as bytes. Add IsoformCheck DB version and hash of annotation to the end of the comments at start of file.
+
+	Args:
+		input_gff3_path: Path to input gff3
+		filtered_refannotation_hash: String with hash of annotation file
+
+	Returns:
+		Bytes which represents the file plus possibly the line about IsoformCheck version
+	"""
+	result_lines = []
+	added_information = False
+	with Util.open_maybe_gzipped(input_gff3_path) as f:
+		for l in f:
+			if l.startswith('#'):
+				result_lines.append(l.strip())
+			else:
+				if not added_information:
+					result_lines.append("# IsoformCheck DB version " + Util.DBVersion + " annotation hash " + filtered_refannotation_hash)
+					added_information = True
+				result_lines.append(l.strip())
+	big_string = "\n".join(result_lines)
+	result = big_string.encode('utf-8')
+	return result
+
+def filter_gff3_to_things_with_CDS(input_gff3_path, output_gff3_path):
+	"""
+	Filters a gff3 file to genes, transcripts, and CDSses of only the transcripts which have CDS
+
+	Args:
+		input_gff3_path: Path to input gff3
+		output_gff3_path: Path to output gff3
+	"""
+	transcript_gene = parse_gff3_gene_names_of_transcripts(input_gff3_path)
+	valid_transcripts = set()
+	valid_genes = set()
+	for transcript, (gene_name, gene_id) in transcript_gene.items():
+		valid_transcripts.add(transcript)
+		valid_genes.add(gene_id)
+	header_printed = False
+	with Util.open_maybe_gzipped(input_gff3_path) as f:
+		with open(output_gff3_path, "w") as out_f:
+			for line in f:
+				if line.startswith('#'):
+					out_f.write(line)
+					continue
+				if not header_printed:
+					out_f.write(f"# IsoformCheck filter {datetime.datetime.now().astimezone()} DB version {Util.DBVersion}\n")
+					header_printed = True
+				if not line.strip():
+					continue
+				fields = line.strip().split('\t')
+				if len(fields) != 9:
+					continue
+				seqid, source, feature_type, start, end, score, strand, phase, attributes = fields
+				if feature_type not in ["transcript", "gene", "CDS"]:
+					continue
+				attrs = parse_attributes(attributes)
+				transcript_id = None
+				gene_id = None
+				if feature_type == "transcript":
+					transcript_id = attrs['ID']
+					gene_id = attrs['Parent']
+				if feature_type == "gene":
+					gene_id = attrs['ID']
+				if feature_type == "CDS":
+					transcript_id = attrs['Parent']
+				if transcript_id in valid_transcripts or gene_id in valid_genes:
+					out_f.write(line)
 
 def parse_gff3_gene_names_of_transcripts(gff3_path):
 	"""

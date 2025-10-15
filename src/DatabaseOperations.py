@@ -804,8 +804,10 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 		print(f"Reference annotation: {reference_annotation}", file=f)
 		print(f"Reference fasta md5 checksum: {str(refseq_md5sum_check.stdout)[0:32]}", file=f)
 		print(f"Reference annotation md5 checksum: {str(refannotation_md5sum_check.stdout)[0:32]}", file=f)
-		liftoff_info = subprocess.run([liftoff_path, "--version"], capture_output=True, text=True)
-		print(f"Liftoff version: {str(liftoff_info.stdout)}", file=f)
+		liftoff_version = Util.get_liftoff_version(liftoff_path)
+		print(f"IsoformCheck version: {Util.Version}", file=f)
+		print(f"IsoformCheck db version: {Util.DBVersion}", file=f)
+		print(f"Liftoff version: {liftoff_version}", file=f)
 
 	with open(folder / "isoforms.fa", "w") as f:
 		# just touch the isoform file to create it
@@ -818,12 +820,20 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 
 	ref_fasta = folder / "reference.fa"
 	HandleAssembly.prepare_fasta(reference_fasta, ref_fasta)
-	copy_command = ["cp", reference_annotation, str(folder / "reference.gff3")]
-	print(f"Copying reference annotation with command:", file=sys.stderr)
-	print(f"{' '.join(copy_command)}", file=sys.stderr)
-	copy_result = subprocess.run(copy_command)
-	if copy_result.returncode != 0:
-		raise RuntimeError("Could not copy reference annotation file.")
+	print(f"Filtering reference annotation", file=sys.stderr)
+	Gff3Parser.filter_gff3_to_things_with_CDS(reference_annotation, str(folder / "reference.gff3"))
+
+	parsed_ref_md5sum_check = subprocess.run(["md5sum", str(folder / "reference.fa")], capture_output=True, text=True)
+	if parsed_ref_md5sum_check.returncode != 0:
+		raise RuntimeError("Could not check parsed reference fasta md5sum.")
+	parsed_ref_hash = str(parsed_ref_md5sum_check.stdout)[0:32]
+	filtered_refannotation_md5sum_check = subprocess.run(["md5sum", str(folder / "reference.gff3")], capture_output=True, text=True)
+	if filtered_refannotation_md5sum_check.returncode != 0:
+		raise RuntimeError("Could not check filtered annotation file md5sum.")
+	filtered_refannotation_hash = str(filtered_refannotation_md5sum_check.stdout)[0:32]
+	with open(folder / "info.txt", "a") as f:
+		print(f"Parsed reference fasta md5 checksum: {parsed_ref_hash}", file=f)
+		print(f"Filtered reference annotation md5 checksum: {filtered_refannotation_hash}", file=f)
 
 	liftoff_command = [liftoff_path, "-g", str(folder / "reference.gff3"), "-o", str(tmp_folder / "reference_annotation.gff3"), "-p", str(num_threads), "-sc", "0.95", "-copies", "-dir", str(tmp_folder / "intermediate_files"), "-u", str(tmp_folder / "unmapped_features.txt"), str(ref_fasta), str(ref_fasta)]
 	print(f"Running liftoff with command:", file=sys.stderr)
@@ -834,12 +844,12 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 
 	subprocess.run(["rm", str(folder / "reference.fa.mmi")])
 
-	with open(str(tmp_folder / "reference_annotation.gff3")) as raw_gff3:
-		with open(str(sample_annotation_folder / "reference.gff3.gz"), "wb") as compressed_gff3:
-			compress_command = ["gzip"]
-			gzip_result = subprocess.run(compress_command, stdin=raw_gff3, stdout=compressed_gff3)
-			if gzip_result.returncode != 0:
-				raise RuntimeError("gzip did not run successfully")
+	gff3_with_version = Gff3Parser.read_gff3_as_bytes_add_isoformcheck_version_to_start(tmp_folder / "reference_annotation.gff3", filtered_refannotation_hash)
+	with open(str(sample_annotation_folder / "reference.gff3.gz"), "wb") as compressed_gff3:
+		compress_command = ["gzip"]
+		gzip_result = subprocess.run(compress_command, input=gff3_with_version, stdout=compressed_gff3)
+		if gzip_result.returncode != 0:
+			raise RuntimeError("gzip did not run successfully")
 
 	agc_command = [agc_path, "create", str(folder / "reference.fa")]
 	with open(str(folder / "sequences.agc"), "wb") as agc_file:

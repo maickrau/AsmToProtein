@@ -30,7 +30,27 @@ def prepare_fasta(input_path, output_path):
 			print(">" + name, file=f)
 			print(sequence, file=f)
 
-def compare_samples_to_database(base_folder, sample_table_file, num_threads, liftoff_path):
+def validate_gff3_is_same_isoformcheck_version(annotation_file, refannotation_hash):
+	"""
+	Validates that a gff3 file has the same IsoformCheck DB version and reference annotation hash as currently.
+
+	Args:
+		annotation_file: Path to input gff3
+		refannotation_hash: String with reference annotation hash
+
+	Returns:
+		True if both IsoformCheck DB version and reference annotation hash match exactly. False otherwise
+	"""
+	wanted_version_string = "# IsoformCheck DB version " + Util.DBVersion + " annotation hash " + refannotation_hash
+	with Util.open_maybe_gzipped(annotation_file) as f:
+		for l in f:
+			if l.strip() == wanted_version_string:
+				return True
+			if not l.startswith('#'):
+				return False
+	return False
+
+def compare_samples_to_database(base_folder, sample_table_file, num_threads, liftoff_path, force):
 	"""
 	Compares multiple new samples to the database. Runs liftoff if necessary and gets transcripts, finds novel isoforms and allele sets, and sample allele sets. Creates a temp folder with all temp files which is deleted in the end.
 
@@ -39,6 +59,7 @@ def compare_samples_to_database(base_folder, sample_table_file, num_threads, lif
 		sample_table_file: Tsv file with sample info
 		num_threads: Number of threads
 		liftoff_path: Path to liftoff executable
+		force: Force add samples even if annotation version does not match
 
 	Returns:
 		tuple of (novel_isoforms, novel_allelesets, sample_allelesets)
@@ -46,6 +67,7 @@ def compare_samples_to_database(base_folder, sample_table_file, num_threads, lif
 		Format of novel_allelesets is [(transcript, sample, alleleset)]
 		Format of sample_allelesets is [(transcript, sample, alleleset)]
 	"""
+	refannotation_hash = Util.get_refannotation_hash(base_folder / "info.txt")
 	sample_info = read_sample_info_from_table(sample_table_file)
 	dupes = check_sample_duplicates(sample_info)
 	if dupes:
@@ -80,6 +102,16 @@ def compare_samples_to_database(base_folder, sample_table_file, num_threads, lif
 				os.makedirs(tmp_folder, exist_ok=False)
 				handle_new_sample_liftoff_use_tmp_folder(base_folder, tmp_folder, sample_annotation_file, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path)
 				sample_info_with_annotations.append((sample_name, sample_haplotype, tmp_folder / (sample_name + "_" + sample_haplotype + ".fa"), sample_annotation_file))
+		samples_with_mismatch = []
+		for name, hap, fasta_file, annotation_file in sample_info_with_annotations:
+			version_match = validate_gff3_is_same_isoformcheck_version(annotation_file, refannotation_hash)
+			if not version_match:
+				samples_with_mismatch.append((name, hap))
+		if len(samples_with_mismatch) >= 1:
+			if not force:
+				raise RuntimeError("Sample annotation does not match IsoformCheck version. Rerun liftover for samples, or if you are sure about what you are doing you can force insert with --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch))
+			else:
+				print(f"{datetime.datetime.now().astimezone()}: Sample annotation does not match IsoformCheck version. Adding samples anyway due to --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch), file=sys.stderr)
 		result = get_novel_isoforms_allelesets(base_folder, sample_info_with_annotations, num_threads)
 	finally:
 		shutil.rmtree(tmp_base_folder)
@@ -335,7 +367,7 @@ def handle_one_new_sample_liftoff_and_transcripts(base_folder, sample_sequence, 
 		agc_path: Path to agc executable
 	"""
 	sample_info = [(sample_name, sample_haplotype, sample_sequence, None)]
-	handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info, num_threads, liftoff_path, agc_path)
+	handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info, num_threads, liftoff_path, agc_path, False)
 
 def run_liftoff(database_folder, input_sequence, output, num_threads, liftoff_path):
 	"""
@@ -446,7 +478,7 @@ def check_samples_with_incongruent_haplotypes(sample_info):
 		incongruent.append((sample, sample_haplotypes[sample]))
 	return incongruent
 
-def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_folder, sample_table_file, num_threads, liftoff_path, agc_path):
+def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_folder, sample_table_file, num_threads, liftoff_path, agc_path, force):
 	"""
 	Handles multiple samples. Adds the sample sequences to the agc database, runs liftoff and gets transcripts, and adds the transcripts to the sample annotation sql database. Creates a temp folder with all temp files which is deleted in the end.
 	If sample table file has a column for annotation, then annotations are copied from there instead of rerun
@@ -456,15 +488,16 @@ def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_fold
 		sample_table_file: Tsv file with descriptions of the samples
 		liftoff_path: Path to liftoff executable
 		agc_path: Path to agc executable
+		force: Force add samples even if annotation version does not match
 	"""
 	sample_info = read_sample_info_from_table(sample_table_file)
 	has_dupes = check_sample_duplicates(sample_info)
 	if has_dupes:
 		raise RuntimeError(f"Duplicate sample and haplotype: sample \"{has_dupes[0]}\" haplotype \"{has_dupes[1]}\"")
 	print(f"Adding {len(sample_info)} new assemblies", file=sys.stderr)
-	handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_info, num_threads, liftoff_path, agc_path)
+	handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_info, num_threads, liftoff_path, agc_path, force)
 
-def handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info, num_threads, liftoff_path, agc_path):
+def handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info, num_threads, liftoff_path, agc_path, force):
 	"""
 	Handles multiple new samples. Adds the sample sequences to the agc database, runs liftoff if necessary and gets transcripts, and adds the transcripts to the sample annotation sql database. Creates a temp folder with all temp files which is deleted in the end.
 
@@ -473,7 +506,9 @@ def handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info
 		sample_info: List of tuples of (sample_name, sample_haplotype, sample_sequence_file_path, sample_annotation_file_path)
 		liftoff_path: Path to liftoff executable
 		agc_path: Path to agc executable
+		force: Force add samples even if annotation version does not match
 	"""
+	refannotation_hash = Util.get_refannotation_hash(base_folder / "info.txt")
 	for sample_name, sample_haplotype, _, _ in sample_info:
 		sample_exists = check_if_sample_exists(base_folder, sample_name, sample_haplotype)
 		if sample_exists:
@@ -497,6 +532,16 @@ def handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info
 				os.makedirs(tmp_folder, exist_ok=False)
 				handle_new_sample_liftoff_use_tmp_folder(base_folder, tmp_folder, sample_annotation_file, sample_sequence, sample_name, sample_haplotype, num_threads, liftoff_path)
 				sample_info_with_annotations.append((sample_name, sample_haplotype, tmp_folder / (sample_name + "_" + sample_haplotype + ".fa"), sample_annotation_file))
+		samples_with_mismatch = []
+		for name, hap, fasta_file, annotation_file in sample_info_with_annotations:
+			version_match = validate_gff3_is_same_isoformcheck_version(annotation_file, refannotation_hash)
+			if not version_match:
+				samples_with_mismatch.append((name, hap))
+		if len(samples_with_mismatch) >= 1:
+			if not force:
+				raise RuntimeError("Sample annotation does not match IsoformCheck version. Rerun liftover for samples, or if you are sure about what you are doing you can force insert with --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch))
+			else:
+				print(f"{datetime.datetime.now().astimezone()}: Sample annotation does not match IsoformCheck version. Adding samples anyway due to --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch), file=sys.stderr)
 		print(f"{datetime.datetime.now().astimezone()}: Adding sample sequences to temporary agc file", file=sys.stderr)
 		temp_agc_path = add_samples_to_agc(base_folder, tmp_base_folder, sample_info_with_annotations, num_threads, agc_path)
 		print(f"{datetime.datetime.now().astimezone()}: Adding sample proteins to sql database", file=sys.stderr)
@@ -601,6 +646,7 @@ def handle_new_sample_liftoff_use_tmp_folder(database_folder, tmp_folder, target
 
 	sample_annotation_folder = database_folder / "sample_annotations"
 	reference_sequence_path = database_folder / "reference.fa"
+	refannotation_hash = Util.get_refannotation_hash(database_folder / "info.txt")
 	temp_file_path = tmp_folder / (sample_name + "_" + sample_haplotype + ".fa")
 	prepare_fasta(sample_sequence, str(temp_file_path))
 
@@ -612,11 +658,11 @@ def handle_new_sample_liftoff_use_tmp_folder(database_folder, tmp_folder, target
 		raise RuntimeError("Liftoff did not run successfully.")
 
 	gzip_command = ["gzip"]
-	with open(tmp_folder / "tmp_annotation.gff3") as raw_gff3:
-		with open(str(target_file), "wb") as compressed_gff3:
-			gzip_result = subprocess.run(gzip_command, stdin=raw_gff3, stdout=compressed_gff3)
-			if gzip_result.returncode != 0:
-				raise RuntimeError("gzip did not run successfully")
+	gff3_with_version = Gff3Parser.read_gff3_as_bytes_add_isoformcheck_version_to_start(tmp_folder / "tmp_annotation.gff3", refannotation_hash)
+	with open(str(target_file), "wb") as compressed_gff3:
+		gzip_result = subprocess.run(gzip_command, input=gff3_with_version, stdout=compressed_gff3)
+		if gzip_result.returncode != 0:
+			raise RuntimeError("gzip did not run successfully")
 
 def check_if_sample_sex_chromosome_annotations_are_fine(database_file, sample_name):
 	"""

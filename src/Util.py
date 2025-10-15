@@ -2,6 +2,24 @@
 
 import gzip
 import random
+import subprocess
+
+DBVersion = "1"
+
+Version = "development"
+
+def get_refannotation_hash(isoformcheck_info_file):
+	result = "not found"
+	with open(isoformcheck_info_file) as f:
+		for l in f:
+			if "Filtered reference annotation md5 checksum" in l:
+				result = l.strip().split(" ")[5]
+	return result
+
+def get_liftoff_version(liftoff_binary):
+	liftoff_info = subprocess.run([liftoff_binary, "--version"], capture_output=True, text=True)
+	liftoff_stdout = str(liftoff_info.stdout)
+	return liftoff_stdout.strip()
 
 def make_random_prefix():
 	chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
