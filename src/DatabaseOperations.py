@@ -835,7 +835,7 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 		print(f"Parsed reference fasta md5 checksum: {parsed_ref_hash}", file=f)
 		print(f"Filtered reference annotation md5 checksum: {filtered_refannotation_hash}", file=f)
 
-	liftoff_command = [liftoff_path, "-g", str(folder / "reference.gff3"), "-o", str(tmp_folder / "reference_annotation.gff3"), "-p", str(num_threads), "-sc", "0.95", "-copies", "-dir", str(tmp_folder / "intermediate_files"), "-u", str(tmp_folder / "unmapped_features.txt"), str(ref_fasta), str(ref_fasta)]
+	liftoff_command = [liftoff_path, "-g", str(folder / "reference.gff3"), "-o", str(tmp_folder / "reference_annotation.gff3"), "-p", str(num_threads), "-sc", "0.95", "-copies", "-polish", "-dir", str(tmp_folder / "intermediate_files"), "-u", str(tmp_folder / "unmapped_features.txt"), str(ref_fasta), str(ref_fasta)]
 	print(f"Running liftoff with command:", file=sys.stderr)
 	print(f"{' '.join(liftoff_command)}", file=sys.stderr)
 	liftoff_result = subprocess.run(liftoff_command)
@@ -844,7 +844,7 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 
 	subprocess.run(["rm", str(folder / "reference.fa.mmi")])
 
-	gff3_with_version = Gff3Parser.read_gff3_as_bytes_add_isoformcheck_version_to_start(tmp_folder / "reference_annotation.gff3", filtered_refannotation_hash)
+	gff3_with_version = Gff3Parser.read_gff3_as_bytes_add_isoformcheck_version_to_start(tmp_folder / "reference_annotation.gff3_polished", filtered_refannotation_hash)
 	with open(str(sample_annotation_folder / "reference.gff3.gz"), "wb") as compressed_gff3:
 		compress_command = ["gzip"]
 		gzip_result = subprocess.run(compress_command, input=gff3_with_version, stdout=compressed_gff3)

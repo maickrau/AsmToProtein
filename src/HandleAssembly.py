@@ -658,7 +658,7 @@ def handle_new_sample_liftoff_use_tmp_folder(database_folder, tmp_folder, target
 		raise RuntimeError("Liftoff did not run successfully.")
 
 	gzip_command = ["gzip"]
-	gff3_with_version = Gff3Parser.read_gff3_as_bytes_add_isoformcheck_version_to_start(tmp_folder / "tmp_annotation.gff3", refannotation_hash)
+	gff3_with_version = Gff3Parser.read_gff3_as_bytes_add_isoformcheck_version_to_start(tmp_folder / "tmp_annotation.gff3_polished", refannotation_hash)
 	with open(str(target_file), "wb") as compressed_gff3:
 		gzip_result = subprocess.run(gzip_command, input=gff3_with_version, stdout=compressed_gff3)
 		if gzip_result.returncode != 0:
