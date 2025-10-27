@@ -424,5 +424,5 @@ if __name__ == "__main__":
 		args.func(args)
 	except Util.ParameterError as e:
 		if Util.GlobalVerbosity > 0:
-			print(traceback.format_exc())
+			print(traceback.format_exc(), file=sys.stderr)
 		print(e, file=sys.stderr)
