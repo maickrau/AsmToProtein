@@ -494,8 +494,9 @@ def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_fold
 	has_dupes = check_sample_duplicates(sample_info)
 	if has_dupes:
 		raise RuntimeError(f"Duplicate sample and haplotype: sample \"{has_dupes[0]}\" haplotype \"{has_dupes[1]}\"")
-	print(f"Adding {len(sample_info)} new assemblies", file=sys.stderr)
+	Util.verbose_print(0, f"{datetime.datetime.now().astimezone()}: Adding {len(sample_info)} new assemblies", file=sys.stderr)
 	handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_info, num_threads, liftoff_path, agc_path, force)
+	Util.verbose_print(0, f"{datetime.datetime.now().astimezone()}: Finished adding {len(sample_info)} new assemblies", file=sys.stderr)
 
 def handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info, num_threads, liftoff_path, agc_path, force):
 	"""
@@ -653,9 +654,15 @@ def handle_new_sample_liftoff_use_tmp_folder(database_folder, tmp_folder, target
 	liftoff_command = [liftoff_path, "-db", str(database_folder / "reference.gff3_db"), "-o", str(tmp_folder / "tmp_annotation.gff3"), "-p", str(num_threads), "-sc", "0.95", "-copies", "-polish", "-dir", str(tmp_folder / "intermediate_files"), "-u", str(tmp_folder / "unmapped_features.txt"), str(temp_file_path), str(reference_sequence_path)]
 	Util.verbose_print(1, f"Running liftoff with command:", file=sys.stderr)
 	Util.verbose_print(1, f"{' '.join(liftoff_command)}", file=sys.stderr)
-	liftoff_result = subprocess.run(liftoff_command)
+	liftoff_result = subprocess.run(liftoff_command, capture_output=True, text=True)
 	if liftoff_result.returncode != 0:
+		Util.verbose_print(0, f"Liftoff log:", file=sys.stderr)
+		Util.verbose_print(0, liftoff_result.stdout, file=sys.stderr)
+		Util.verbose_print(0, liftoff_result.stderr, file=sys.stderr)
 		raise RuntimeError("Liftoff did not run successfully.")
+	Util.verbose_print(2, f"Liftoff log:", file=sys.stderr)
+	Util.verbose_print(2, liftoff_result.stdout, file=sys.stderr)
+	Util.verbose_print(2, liftoff_result.stderr, file=sys.stderr)
 
 	gzip_command = ["gzip"]
 	gff3_with_version = Gff3Parser.read_gff3_as_bytes_add_isoformcheck_version_to_start(tmp_folder / "tmp_annotation.gff3_polished", refannotation_hash)

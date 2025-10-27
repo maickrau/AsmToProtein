@@ -791,6 +791,7 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 		num_threads: Number of threads for liftoff
 	"""
 
+	Util.verbose_print(0, f"{datetime.datetime.now().astimezone()}: Initializing new IsoformCheck database", file=sys.stderr)
 	os.makedirs(folder, exist_ok=False)
 	refseq_md5sum_check = subprocess.run(["md5sum", reference_fasta], capture_output=True, text=True)
 	if refseq_md5sum_check.returncode != 0:
@@ -838,9 +839,15 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 	liftoff_command = [liftoff_path, "-g", str(folder / "reference.gff3"), "-o", str(tmp_folder / "reference_annotation.gff3"), "-p", str(num_threads), "-sc", "0.95", "-copies", "-polish", "-dir", str(tmp_folder / "intermediate_files"), "-u", str(tmp_folder / "unmapped_features.txt"), str(ref_fasta), str(ref_fasta)]
 	Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Running liftoff with command:", file=sys.stderr)
 	Util.verbose_print(1, f"{' '.join(liftoff_command)}", file=sys.stderr)
-	liftoff_result = subprocess.run(liftoff_command)
+	liftoff_result = subprocess.run(liftoff_command, capture_output=True, text=True)
 	if liftoff_result.returncode != 0:
+		Util.verbose_print(0, f"Liftoff log:", file=sys.stderr)
+		Util.verbose_print(0, liftoff_result.stdout, file=sys.stderr)
+		Util.verbose_print(0, liftoff_result.stderr, file=sys.stderr)
 		raise RuntimeError("Liftoff did not run successfully.")
+	Util.verbose_print(2, f"Liftoff log:", file=sys.stderr)
+	Util.verbose_print(2, liftoff_result.stdout, file=sys.stderr)
+	Util.verbose_print(2, liftoff_result.stderr, file=sys.stderr)
 
 	subprocess.run(["rm", str(folder / "reference.fa.mmi")])
 
@@ -864,4 +871,4 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 	shutil.rmtree(tmp_folder)
 
 	HandleAssembly.add_sample_proteins_to_database(folder, sample_annotation_folder / "reference.gff3.gz", ref_fasta, "reference", "reference")
-	Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Done building database", file=sys.stderr)
+	Util.verbose_print(0, f"{datetime.datetime.now().astimezone()}: Done building database", file=sys.stderr)

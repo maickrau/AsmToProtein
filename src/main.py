@@ -5,6 +5,7 @@ import argparse
 import pathlib
 import contextlib
 import math
+import traceback
 import DatabaseOperations
 import Analysis
 import HandleAssembly
@@ -419,4 +420,9 @@ if __name__ == "__main__":
 	if args.verbose:
 		Util.GlobalVerbosity = len(args.verbose)
 
-	args.func(args)
+	try:
+		args.func(args)
+	except RuntimeError as e:
+		if Util.GlobalVerbosity > 0:
+			print(traceback.format_exc())
+		print(e, file=sys.stderr)
