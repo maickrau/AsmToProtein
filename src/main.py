@@ -419,6 +419,4 @@ if __name__ == "__main__":
 	if args.verbose:
 		Util.GlobalVerbosity = len(args.verbose)
 
-	print(f"verbosity {Util.GlobalVerbosity}", file=sys.stderr)
-
 	args.func(args)
