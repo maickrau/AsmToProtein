@@ -297,7 +297,10 @@ if __name__ == "__main__":
 	parser.add_argument('--version', action='version', version="IsoformCheck version " + Util.Version)
 	subparsers = parser.add_subparsers(dest="subparser_name")
 
-	create_db_parser = subparsers.add_parser("initialize", description="Create new database")
+	verbose_parser = argparse.ArgumentParser(add_help=False)
+	verbose_parser.add_argument('--verbose', action="append", nargs='*', help="Print debug information")
+
+	create_db_parser = subparsers.add_parser("initialize", description="Create new database", parents=[verbose_parser])
 	create_db_parser.add_argument('-r', '--reference-genome', required=True, help='Reference genome file (required)')
 	create_db_parser.add_argument('-a', '--annotation', required=True, help='Reference annotation gff3 (required)')
 	create_db_parser.add_argument('-db', '--database', required=True, help='Output database folder')
@@ -306,7 +309,7 @@ if __name__ == "__main__":
 	create_db_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
 	create_db_parser.set_defaults(func=create_db)
 
-	run_liftoff_parser = subparsers.add_parser("liftover", description="Lift over annotations to one haplotype")
+	run_liftoff_parser = subparsers.add_parser("liftover", description="Lift over annotations to one haplotype", parents=[verbose_parser])
 	run_liftoff_parser.add_argument('-i', '--input', required=True, help='Haplotype sequence file (required)')
 	run_liftoff_parser.add_argument('-o', '--output', required=True, help='Output annotation file')
 	run_liftoff_parser.add_argument('-db', '--database', required=True, help='Database folder')
@@ -314,7 +317,7 @@ if __name__ == "__main__":
 	run_liftoff_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
 	run_liftoff_parser.set_defaults(func=run_liftoff)
 
-	add_sample_parser = subparsers.add_parser("addsample", description="Add a new sample")
+	add_sample_parser = subparsers.add_parser("addsample", description="Add a new sample", parents=[verbose_parser])
 	add_sample_parser.add_argument('-i', '--input', required=True, help='Sequence file (required)')
 	add_sample_parser.add_argument('--name', required=True, help='Sample name')
 	add_sample_parser.add_argument('--haplotype', required=True, help='Sample haplotype')
@@ -324,7 +327,7 @@ if __name__ == "__main__":
 	add_sample_parser.add_argument('-t', '--threads', default="4", help='Number of threads')
 	add_sample_parser.set_defaults(func=add_sample)
 
-	add_samples_parser = subparsers.add_parser("addsamples", description="Add multiple new samples")
+	add_samples_parser = subparsers.add_parser("addsamples", description="Add multiple new samples", parents=[verbose_parser])
 	add_samples_parser.add_argument('-i', '--input', required=True, help='Sample table file (required)')
 	add_samples_parser.add_argument('-db', '--database', required=True, help='Database folder')
 	add_samples_parser.add_argument('--liftoff', default="liftoff", help="Path to liftoff")
@@ -333,41 +336,41 @@ if __name__ == "__main__":
 	add_samples_parser.add_argument('--force', action="store_true", help='Force insert samples even if validation fails')
 	add_samples_parser.set_defaults(func=add_samples)
 
-	list_sample_parser = subparsers.add_parser("listsamples", description="List all samples")
+	list_sample_parser = subparsers.add_parser("listsamples", description="List all samples", parents=[verbose_parser])
 	list_sample_parser.add_argument('-db', '--database', required=True, help='Database folder')
 	list_sample_parser.add_argument('-o', '--output', default="-", help='Output file (- for stdout) (default -)')
 	list_sample_parser.set_defaults(func=list_samples)
 
-	add_group_parser = subparsers.add_parser("addgroup", description="Add a sample to a group")
+	add_group_parser = subparsers.add_parser("addgroup", description="Add a sample to a group", parents=[verbose_parser])
 	add_group_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	add_group_parser.add_argument('--sample', required=True, help='Name of sample (required)')
 	add_group_parser.add_argument('--group', required=True, help='Name of group (required)')
 	add_group_parser.set_defaults(func=add_group)
 
-	remove_group_parser = subparsers.add_parser("removegroup", description="Remove a sample from a group")
+	remove_group_parser = subparsers.add_parser("removegroup", description="Remove a sample from a group", parents=[verbose_parser])
 	remove_group_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	remove_group_parser.add_argument('--sample', required=True, help='Name of sample (required)')
 	remove_group_parser.add_argument('--group', required=True, help='Name of group (required)')
 	remove_group_parser.set_defaults(func=remove_group)
 
-	list_group_parser = subparsers.add_parser("listgroups", description="List all groups per samples")
+	list_group_parser = subparsers.add_parser("listgroups", description="List all groups per samples", parents=[verbose_parser])
 	list_group_parser.add_argument('-db', '--database', required=True, help='Database folder')
 	list_group_parser.add_argument('-o', '--output', default="-", help='Output file (- for stdout) (default -)')
 	list_group_parser.set_defaults(func=list_groups)
 
-	update_names_parser = subparsers.add_parser("rename", description="Rename isoforms according to coverage")
+	update_names_parser = subparsers.add_parser("rename", description="Rename isoforms according to coverage", parents=[verbose_parser])
 	update_names_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	update_names_parser.set_defaults(func=update_names)
 
-	stats_parser = subparsers.add_parser("stats", description="Print basic statistics about database")
+	stats_parser = subparsers.add_parser("stats", description="Print basic statistics about database", parents=[verbose_parser])
 	stats_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	stats_parser.set_defaults(func=stats)
 
-	validate_parser = subparsers.add_parser("validate", description="Check sample haplotype validity")
+	validate_parser = subparsers.add_parser("validate", description="Check sample haplotype validity", parents=[verbose_parser])
 	validate_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	validate_parser.set_defaults(func=validate)
 
-	contingency_table_parser = subparsers.add_parser("contingencytable", description="Create contingency tables")
+	contingency_table_parser = subparsers.add_parser("contingencytable", description="Create contingency tables", parents=[verbose_parser])
 	contingency_table_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	contingency_table_parser.add_argument('--transcript', help='Name of transcript. If no transcript is given, all transcripts will be used.')
 	contingency_table_parser.add_argument('--group', nargs='+', help='Names of groups (at least two required, multiple possible)')
@@ -376,7 +379,7 @@ if __name__ == "__main__":
 	contingency_table_parser.add_argument('--include-gene-info', action="store_true", help='Include information about gene in the output table.')
 	contingency_table_parser.set_defaults(func=contingency_table)
 
-	chi_square_parser = subparsers.add_parser("chisquare", description="Calculate chi squared P-values of group vs allele set")
+	chi_square_parser = subparsers.add_parser("chisquare", description="Calculate chi squared P-values of group vs allele set", parents=[verbose_parser])
 	chi_square_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	chi_square_parser.add_argument('--transcript', help='Name of transcript. If no transcript is given, all transcripts will be used.')
 	chi_square_parser.add_argument('--group', nargs='*', help='Names of groups to include')
@@ -385,21 +388,21 @@ if __name__ == "__main__":
 	chi_square_parser.add_argument('--include-gene-info', action="store_true", help='Include information about gene in the output table.')
 	chi_square_parser.set_defaults(func=chi_square)
 
-	export_allelesets_parser = subparsers.add_parser("exportallelesets", description="Export per-sample allele set table")
+	export_allelesets_parser = subparsers.add_parser("exportallelesets", description="Export per-sample allele set table", parents=[verbose_parser])
 	export_allelesets_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	export_allelesets_parser.add_argument('--transcript', help='Name of transcript. If no transcript is given, all transcripts will be used.')
 	export_allelesets_parser.add_argument('-o', '--output', default="-", help='Output file (- for stdout) (default -)')
 	export_allelesets_parser.add_argument('--include-gene-info', action="store_true", help='Include information about gene in the output table.')
 	export_allelesets_parser.set_defaults(func=export_allelesets)
 
-	export_isoforms_parser = subparsers.add_parser("exportisoforms", description="Export isoform table")
+	export_isoforms_parser = subparsers.add_parser("exportisoforms", description="Export isoform table", parents=[verbose_parser])
 	export_isoforms_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	export_isoforms_parser.add_argument('--transcript', help='Name of transcript. If no transcript is given, all transcripts will be used.')
 	export_isoforms_parser.add_argument('-o', '--output', default="-", help='Output file (- for stdout) (default -)')
 	export_isoforms_parser.add_argument('--include-gene-info', action="store_true", help='Include information about gene in the output table.')
 	export_isoforms_parser.set_defaults(func=export_isoforms)
 
-	compare_novel_parser = subparsers.add_parser("comparesamples", description="Compare samples to database")
+	compare_novel_parser = subparsers.add_parser("comparesamples", description="Compare samples to database", parents=[verbose_parser])
 	compare_novel_parser.add_argument('-db', '--database', required=True, help='Database folder (required)')
 	compare_novel_parser.add_argument('--table', required=True, help='Table with novel samples to include')
 	compare_novel_parser.add_argument('-o', '--output', default="result", help='Output prefix (default \"result\")')
@@ -412,5 +415,10 @@ if __name__ == "__main__":
 	if not args.subparser_name:
 		args = parser.parse_args(["--help"])
 		exit(0)
+
+	if args.verbose:
+		Util.GlobalVerbosity = len(args.verbose)
+
+	print(f"verbosity {Util.GlobalVerbosity}", file=sys.stderr)
 
 	args.func(args)

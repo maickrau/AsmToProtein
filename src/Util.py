@@ -8,6 +8,8 @@ DBVersion = "1"
 
 Version = "development"
 
+GlobalVerbosity = 0
+
 def get_refannotation_hash(isoformcheck_info_file):
 	result = "not found"
 	with open(isoformcheck_info_file) as f:
@@ -49,3 +51,7 @@ def get_alleleset_name(alleleset):
 	assert isinstance(alleleset, tuple)
 	if len(alleleset) == 0: return "missing"
 	return "+".join(alleleset)
+
+def verbose_print(verbosity, s, file):
+	if verbosity <= GlobalVerbosity:
+		print(s, file=file)

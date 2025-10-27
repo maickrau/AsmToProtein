@@ -5,6 +5,7 @@ import sys
 import datetime
 import Gff3Parser
 import SequenceReader
+import Util
 
 def reverse_complement(seq):
 	complement = str.maketrans('ACGTacgtNn', 'TGCAtgcaNn')
@@ -124,7 +125,7 @@ def process_sample_transcripts_and_contigs(input_file, lifted_gff):
 	if not os.path.exists(lifted_gff):
 		raise RuntimeError(f"Lifted annotation GFF not found")
 
-	print(f"{datetime.datetime.now().astimezone()}: Reading annotation of sample.", file=sys.stderr)
+	Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Reading annotation of sample.", file=sys.stderr)
 	(transcripts, gene_locations) = Gff3Parser.parse_gff3_transcripts_with_exons(lifted_gff)
 	transcript_locations = {}
 	transcripts_per_contig = {}
@@ -136,7 +137,7 @@ def process_sample_transcripts_and_contigs(input_file, lifted_gff):
 
 	result_contig_lengths = {}
 	transcripts_data = []
-	print(f"{datetime.datetime.now().astimezone()}: Reading sequences of sample.", file=sys.stderr)
+	Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Reading sequences of sample.", file=sys.stderr)
 	for name, contig_seq in SequenceReader.stream_sequences(input_file):
 		result_contig_lengths[name] = len(contig_seq)
 		if name not in transcripts_per_contig: continue

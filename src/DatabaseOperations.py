@@ -663,25 +663,25 @@ def rename_isoforms_by_coverage(database_path):
 		isoform_coverages_per_transcript = {}
 		reference_isoform = {}
 		isoform_belongs_to_transcript = {}
-		print(f"{datetime.datetime.now().astimezone()}: Get isoform to transcript mapping", file=sys.stderr)
+		Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Get isoform to transcript mapping", file=sys.stderr)
 		for transcript, isoform in cursor.execute("SELECT TranscriptId, Id FROM Isoform"):
 			isoform_belongs_to_transcript[isoform] = transcript
-		print(f"{datetime.datetime.now().astimezone()}: Get isoform coverages", file=sys.stderr)
+		Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Get isoform coverages", file=sys.stderr)
 		for isoform, coverage in cursor.execute("SELECT IsoformId, COUNT(*) FROM SampleAllele GROUP BY IsoformId").fetchall():
 			transcript = isoform_belongs_to_transcript[isoform]
 			if transcript not in isoform_coverages_per_transcript: isoform_coverages_per_transcript[transcript] = []
 			isoform_coverages_per_transcript[transcript].append((coverage, isoform))
-		print(f"{datetime.datetime.now().astimezone()}: Get reference isoforms", file=sys.stderr)
+		Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Get reference isoforms", file=sys.stderr)
 		for transcript, isoform in cursor.execute("SELECT DISTINCT TranscriptId, Isoform.Id FROM Isoform INNER JOIN SampleAllele ON SampleAllele.IsoformId = Isoform.Id INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId = Sample.Id WHERE Sample.Name='reference'").fetchall():
 			if transcript not in reference_isoform:
 				reference_isoform[transcript] = isoform
 			else:
 				reference_isoform[transcript] = None
-		print(f"{datetime.datetime.now().astimezone()}: Update reference isoform names", file=sys.stderr)
+		Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Update reference isoform names", file=sys.stderr)
 		for transcript, isoform in reference_isoform.items():
 			if isoform is None: continue
 			cursor.execute("UPDATE Isoform SET Name=? WHERE Id=?", ("ref", isoform))
-		print(f"{datetime.datetime.now().astimezone()}: Update alt isoform names", file=sys.stderr)
+		Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Update alt isoform names", file=sys.stderr)
 		for transcript, coveragelist in isoform_coverages_per_transcript.items():
 			coveragelist.sort(key=lambda x: (-x[0], x[1]))
 			index = 0
@@ -690,9 +690,9 @@ def rename_isoforms_by_coverage(database_path):
 				name = get_isoform_name(index)
 				cursor.execute("UPDATE Isoform SET Name=? WHERE Id=?", (name, isoform))
 				index += 1
-		print(f"{datetime.datetime.now().astimezone()}: Commit", file=sys.stderr)
+		Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Commit", file=sys.stderr)
 		connection.commit()
-	print(f"{datetime.datetime.now().astimezone()}: Done", file=sys.stderr)
+	Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Done", file=sys.stderr)
 
 def initialize_sqlite_db_schema(database_path):
 	"""
@@ -820,7 +820,7 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 
 	ref_fasta = folder / "reference.fa"
 	HandleAssembly.prepare_fasta(reference_fasta, ref_fasta)
-	print(f"Filtering reference annotation", file=sys.stderr)
+	Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Filtering reference annotation", file=sys.stderr)
 	Gff3Parser.filter_gff3_to_things_with_CDS(reference_annotation, str(folder / "reference.gff3"))
 
 	parsed_ref_md5sum_check = subprocess.run(["md5sum", str(folder / "reference.fa")], capture_output=True, text=True)
@@ -836,8 +836,8 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 		print(f"Filtered reference annotation md5 checksum: {filtered_refannotation_hash}", file=f)
 
 	liftoff_command = [liftoff_path, "-g", str(folder / "reference.gff3"), "-o", str(tmp_folder / "reference_annotation.gff3"), "-p", str(num_threads), "-sc", "0.95", "-copies", "-polish", "-dir", str(tmp_folder / "intermediate_files"), "-u", str(tmp_folder / "unmapped_features.txt"), str(ref_fasta), str(ref_fasta)]
-	print(f"Running liftoff with command:", file=sys.stderr)
-	print(f"{' '.join(liftoff_command)}", file=sys.stderr)
+	Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Running liftoff with command:", file=sys.stderr)
+	Util.verbose_print(1, f"{' '.join(liftoff_command)}", file=sys.stderr)
 	liftoff_result = subprocess.run(liftoff_command)
 	if liftoff_result.returncode != 0:
 		raise RuntimeError("Liftoff did not run successfully.")
@@ -857,9 +857,11 @@ def initialize_database(folder, reference_fasta, reference_annotation, liftoff_p
 		if agc_result.returncode != 0:
 			raise RuntimeError("agc did not run successfully")
 
+	Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Initializing and filling sql db", file=sys.stderr)
 	initialize_sqlite_db_schema(folder / "sample_info.db")
 	insert_reference_annotations_to_db(folder / "sample_info.db", folder / "reference.gff3")
 
 	shutil.rmtree(tmp_folder)
 
 	HandleAssembly.add_sample_proteins_to_database(folder, sample_annotation_folder / "reference.gff3.gz", ref_fasta, "reference", "reference")
+	Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Done building database", file=sys.stderr)

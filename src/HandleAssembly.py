@@ -93,10 +93,10 @@ def compare_samples_to_database(base_folder, sample_table_file, num_threads, lif
 		sample_info_with_annotations = []
 		for sample_name, sample_haplotype, sample_sequence, annotation in sample_info:
 			if annotation:
-				print(f"{datetime.datetime.now().astimezone()}: Using annotations for sample \"{sample_name}\" haplotype \"{sample_haplotype}\" from path \"{annotation}\"", file=sys.stderr)
+				Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Using annotations for sample \"{sample_name}\" haplotype \"{sample_haplotype}\" from path \"{annotation}\"", file=sys.stderr)
 				sample_info_with_annotations.append((sample_name, sample_haplotype, sample_sequence, annotation))
 			else:
-				print(f"{datetime.datetime.now().astimezone()}: Running liftoff for sample \"{sample_name}\" haplotype \"{sample_haplotype}\"", file=sys.stderr)
+				Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Running liftoff for sample \"{sample_name}\" haplotype \"{sample_haplotype}\"", file=sys.stderr)
 				sample_annotation_file = annotation_folder / (sample_name + "_" + sample_haplotype + ".gff3.gz")
 				tmp_folder = tmp_base_folder / ("tmp_" + sample_name + "_" + sample_haplotype)
 				os.makedirs(tmp_folder, exist_ok=False)
@@ -136,13 +136,13 @@ def get_sample_transcripts_and_contig_lens(sample_info, num_threads):
 			if input_id_queue.empty(): return
 			index = input_id_queue.get()
 			sample_name, sample_haplotype, sample_fasta, sample_annotation = sample_info[index]
-			print(f"{datetime.datetime.now().astimezone()}: Get transcripts of sample {sample_name} haplotype {sample_haplotype}", file=sys.stderr)
+			Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Get transcripts of sample {sample_name} haplotype {sample_haplotype}", file=sys.stderr)
 			result_here = []
 			(sample_transcripts, gene_locations, contig_lengths) = TranscriptExtractor.process_sample_transcripts_and_contigs(sample_fasta, sample_annotation)
 			for transcript_id, sequence, extra_copy, location in sample_transcripts:
 				result_here.append((transcript_id, sequence, location))
 			output_transcript_queue.put((index, result_here, contig_lengths))
-			print(f"{datetime.datetime.now().astimezone()}: Got transcripts of sample {sample_name} haplotype {sample_haplotype}", file=sys.stderr)
+			Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Got transcripts of sample {sample_name} haplotype {sample_haplotype}", file=sys.stderr)
 	input_ids = queue.Queue(len(sample_info))
 	output_transcripts = queue.Queue(len(sample_info))
 	for i in range(0, len(sample_info)):
@@ -153,7 +153,7 @@ def get_sample_transcripts_and_contig_lens(sample_info, num_threads):
 		threads[i].start()
 	for i in range(0, num_threads):
 		threads[i].join()
-	print(f"{datetime.datetime.now().astimezone()}: Merging sample transcripts and contig lengths", file=sys.stderr)
+	Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Merging sample transcripts and contig lengths", file=sys.stderr)
 	all_processed_transcripts = []
 	all_sample_contig_lens = []
 	for i in range(0, len(sample_info)):
@@ -186,9 +186,9 @@ def get_novel_isoforms_allelesets(base_folder, sample_info, num_threads):
 		Format of novel_allelesets is [(transcript, sample, alleleset)]
 		Format of sample_allelesets is [(transcript, sample, alleleset)]
 	"""
-	print(f"step 1 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	Util.verbose_print(2, f"step 1 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	all_processed_transcripts, all_sample_contig_lens = get_sample_transcripts_and_contig_lens(sample_info, num_threads)
-	print(f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	Util.verbose_print(2, f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	transcript_id_map = {}
 	isoform_name_map = {}
 	isoform_sequences = DatabaseOperations.get_isoform_sequences_from_file(str(base_folder / "isoforms.fa"))
@@ -269,9 +269,9 @@ def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threa
 		sample_info: List of tuples of (sample_name, sample_haplotype, sample_fasta_file_path, sample_annotation_file_path)
 		num_threads: Number of threads to use. Processing each sample uses one thread but multiple samples can be processed in parallel
 	"""
-	print(f"step 1 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	Util.verbose_print(2, f"step 1 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	all_processed_transcripts, all_sample_contig_lens = get_sample_transcripts_and_contig_lens(sample_info, num_threads)
-	print(f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	Util.verbose_print(2, f"step 2 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 	transcript_id_map = {}
 	isoform_name_map = {}
 	sample_contig_db_ids = []
@@ -281,17 +281,17 @@ def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threa
 	with sqlite3.connect(str(base_folder / "sample_info.db")) as connection:
 		cursor = connection.cursor()
 		cursor.arraysize = 10000
-		print(f"step 3 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+		Util.verbose_print(2, f"step 3 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		for db_id, transcript_id in cursor.execute("SELECT Id, Name FROM Transcript").fetchall():
 			transcript_id_map[transcript_id] = db_id
-		print(f"step 4 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+		Util.verbose_print(2, f"step 4 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		for isoform_id, transcript_id, transcript_sequence_id in cursor.execute("SELECT Id, TranscriptId, SequenceId FROM Isoform").fetchall():
 			isoform_name_map[(transcript_id, isoform_sequences[transcript_sequence_id])] = isoform_id
-		print(f"step 5 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+		Util.verbose_print(2, f"step 5 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		for sampleindex in range(0, len(sample_info)):
 			sample_name = sample_info[sampleindex][0]
 			sample_haplotype = sample_info[sampleindex][1]
-			print(f"step 6 sample {sample_name} hap {sample_haplotype} time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+			Util.verbose_print(2, f"step 6 sample {sample_name} hap {sample_haplotype} time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 			sample_contig_db_ids.append({})
 			sample_contig_lens = all_sample_contig_lens[sampleindex]
 			processed_transcripts = all_processed_transcripts[sampleindex]
@@ -301,45 +301,45 @@ def add_multiple_sample_proteins_to_database(base_folder, sample_info, num_threa
 				sample_id = cursor.execute("SELECT Id FROM Sample WHERE Name=?", (sample_name,)).fetchone()
 				assert sample_id is not None
 			sample_id = sample_id[0]
-			print(f"step 7 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+			Util.verbose_print(2, f"step 7 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 			cursor.execute("INSERT INTO Haplotype (SampleId, Haplotype) VALUES (?, ?)", (sample_id, sample_haplotype))
-			print(f"step 8 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+			Util.verbose_print(2, f"step 8 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 			haplotype_id = cursor.execute("SELECT Id FROM Haplotype WHERE SampleId=? AND Haplotype=?", (sample_id, sample_haplotype)).fetchone()
 			assert haplotype_id is not None
 			haplotype_id = haplotype_id[0]
 			all_haplotype_ids.append(haplotype_id)
-			print(f"step 9 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+			Util.verbose_print(2, f"step 9 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 			for name, length in sample_contig_lens.items():
 				cursor.execute("INSERT INTO SampleContig (HaplotypeId, Name, Length) VALUES (?, ?, ?)", (haplotype_id, name, length))
-			print(f"step 10 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+			Util.verbose_print(2, f"step 10 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 			for db_id, name in cursor.execute("SELECT Id, Name FROM SampleContig WHERE HaplotypeId=?", (haplotype_id,)):
 				sample_contig_db_ids[sampleindex][name] = db_id
-			print(f"step 11 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+			Util.verbose_print(2, f"step 11 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 			for (transcript_id, sequence, location) in processed_transcripts:
 				transcript_db_id = transcript_id_map[transcript_id]
 				if (transcript_db_id, sequence) not in isoform_name_map: novel_isoforms.add((transcript_db_id, sequence))
-		print(f"step 12 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+		Util.verbose_print(2, f"step 12 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		if len(novel_isoforms) >= 1:
 			inserted_isoforms = DatabaseOperations.add_isoforms_to_fasta(base_folder / "isoforms.fa", novel_isoforms)
-			print(f"step 13 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+			Util.verbose_print(2, f"step 13 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 			cursor.executemany("INSERT INTO isoform (TranscriptId, SequenceId) VALUES (?, ?)", inserted_isoforms)
-			print(f"step 13.5 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+			Util.verbose_print(2, f"step 13.5 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 			isoform_sequences = DatabaseOperations.get_isoform_sequences_from_file(str(base_folder / "isoforms.fa"))
-			print(f"step 14 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+			Util.verbose_print(2, f"step 14 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 			for isoform_id, transcript_id, transcript_sequence_id in cursor.execute("SELECT isoform.Id, Transcript.Id, isoform.SequenceId FROM Transcript INNER JOIN isoform ON isoform.TranscriptId = Transcript.Id").fetchall():
 				isoform_name_map[(transcript_id, isoform_sequences[transcript_sequence_id])] = isoform_id
-		print(f"step 15 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+		Util.verbose_print(2, f"step 15 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		insert_lines = []
 		for sampleindex in range(0, len(sample_info)):
 			processed_transcripts = all_processed_transcripts[sampleindex]
 			for transcript_id, sequence, location in processed_transcripts:
 				insert_lines.append((all_haplotype_ids[sampleindex], isoform_name_map[(transcript_id_map[transcript_id], sequence)], sample_contig_db_ids[sampleindex][location[0]], location[1], location[2], location[3]))
-		print(f"step 16 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+		Util.verbose_print(2, f"step 16 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		cursor.executemany("INSERT INTO SampleAllele (HaplotypeId, IsoformId, SampleContigId, SampleLocationStrand, SampleLocationStart, SampleLocationEnd) VALUES (?, ?, ?, ?, ?, ?)", insert_lines)
-		print(f"step 17 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+		Util.verbose_print(2, f"step 17 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 		connection.commit()
-		print(f"step 18 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
-	print(f"step 19 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+		Util.verbose_print(2, f"step 18 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
+	Util.verbose_print(2, f"step 19 time {datetime.datetime.now().astimezone()}", file=sys.stderr)
 
 def add_sample_proteins_to_database(base_folder, sample_annotation, sample_fasta, sample_name, sample_haplotype):
 	"""
@@ -523,10 +523,10 @@ def handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info
 		sample_info_with_annotations = []
 		for sample_name, sample_haplotype, sample_sequence, annotation in sample_info:
 			if annotation:
-				print(f"{datetime.datetime.now().astimezone()}: Using annotations for sample \"{sample_name}\" haplotype \"{sample_haplotype}\" from path \"{annotation}\"", file=sys.stderr)
+				Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Using annotations for sample \"{sample_name}\" haplotype \"{sample_haplotype}\" from path \"{annotation}\"", file=sys.stderr)
 				sample_info_with_annotations.append((sample_name, sample_haplotype, sample_sequence, annotation))
 			else:
-				print(f"{datetime.datetime.now().astimezone()}: Running liftoff for sample \"{sample_name}\" haplotype \"{sample_haplotype}\"", file=sys.stderr)
+				Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Running liftoff for sample \"{sample_name}\" haplotype \"{sample_haplotype}\"", file=sys.stderr)
 				sample_annotation_file = annotation_folder / (sample_name + "_" + sample_haplotype + ".gff3.gz")
 				tmp_folder = tmp_base_folder / ("tmp_" + sample_name + "_" + sample_haplotype)
 				os.makedirs(tmp_folder, exist_ok=False)
@@ -542,14 +542,14 @@ def handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info
 				raise RuntimeError("Sample annotation does not match IsoformCheck version. Rerun liftover for samples, or if you are sure about what you are doing you can force insert with --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch))
 			else:
 				print(f"{datetime.datetime.now().astimezone()}: Sample annotation does not match IsoformCheck version. Adding samples anyway due to --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch), file=sys.stderr)
-		print(f"{datetime.datetime.now().astimezone()}: Adding sample sequences to temporary agc file", file=sys.stderr)
+		Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Adding sample sequences to temporary agc file", file=sys.stderr)
 		temp_agc_path = add_samples_to_agc(base_folder, tmp_base_folder, sample_info_with_annotations, num_threads, agc_path)
-		print(f"{datetime.datetime.now().astimezone()}: Adding sample proteins to sql database", file=sys.stderr)
+		Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Adding sample proteins to sql database", file=sys.stderr)
 		add_multiple_sample_proteins_to_database(base_folder, sample_info_with_annotations, num_threads)
-		print(f"{datetime.datetime.now().astimezone()}: Copying temporary agc and annotation files to database folder", file=sys.stderr)
+		Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Copying temporary agc and annotation files to database folder", file=sys.stderr)
 		copy_annotations(base_folder, sample_info_with_annotations)
 		copy_agc(temp_agc_path, base_folder)
-		print(f"{datetime.datetime.now().astimezone()}: Finished adding samples successfully", file=sys.stderr)
+		Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Finished adding samples successfully", file=sys.stderr)
 	finally:
 		shutil.rmtree(tmp_base_folder)
 
@@ -620,7 +620,7 @@ def add_samples_to_agc(database_folder, tmp_folder, sample_info, num_threads, ag
 	agc_file_number = 0
 	for sample_name, sample_haplotype, sample_sequence, _ in sample_info:
 		agc_file_number += 1
-		print(f"{datetime.datetime.now().astimezone()}: Adding sample {sample_name} haplotype {sample_haplotype} to temporary agc file", file=sys.stderr)
+		Util.verbose_print(2, f"{datetime.datetime.now().astimezone()}: Adding sample {sample_name} haplotype {sample_haplotype} to temporary agc file", file=sys.stderr)
 		next_file = tmp_folder / ("tmp_agc_" + str(agc_file_number % 2) + ".agc")
 		agc_command = [agc_path, "append", "-t", str(num_threads), str(initial_agc_file), str(sample_sequence)]
 		with open(str(next_file), "wb") as new_agc:
@@ -651,8 +651,8 @@ def handle_new_sample_liftoff_use_tmp_folder(database_folder, tmp_folder, target
 	prepare_fasta(sample_sequence, str(temp_file_path))
 
 	liftoff_command = [liftoff_path, "-db", str(database_folder / "reference.gff3_db"), "-o", str(tmp_folder / "tmp_annotation.gff3"), "-p", str(num_threads), "-sc", "0.95", "-copies", "-polish", "-dir", str(tmp_folder / "intermediate_files"), "-u", str(tmp_folder / "unmapped_features.txt"), str(temp_file_path), str(reference_sequence_path)]
-	print(f"Running liftoff with command:", file=sys.stderr)
-	print(f"{' '.join(liftoff_command)}", file=sys.stderr)
+	Util.verbose_print(1, f"Running liftoff with command:", file=sys.stderr)
+	Util.verbose_print(1, f"{' '.join(liftoff_command)}", file=sys.stderr)
 	liftoff_result = subprocess.run(liftoff_command)
 	if liftoff_result.returncode != 0:
 		raise RuntimeError("Liftoff did not run successfully.")
