@@ -422,7 +422,7 @@ if __name__ == "__main__":
 
 	try:
 		args.func(args)
-	except RuntimeError as e:
+	except Util.ParameterError as e:
 		if Util.GlobalVerbosity > 0:
 			print(traceback.format_exc())
 		print(e, file=sys.stderr)

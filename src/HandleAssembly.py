@@ -71,18 +71,18 @@ def compare_samples_to_database(base_folder, sample_table_file, num_threads, lif
 	sample_info = read_sample_info_from_table(sample_table_file)
 	dupes = check_sample_duplicates(sample_info)
 	if dupes:
-		raise RuntimeError(f"Duplicate sample: sample name \"{dupes[0]}\" haplotype \"{dupes[1]}\"")
+		raise Util.ParameterError(f"Duplicate sample: sample name \"{dupes[0]}\" haplotype \"{dupes[1]}\"")
 	incongruents = check_samples_with_incongruent_haplotypes(sample_info)
 	if len(incongruents) > 0:
 		invalid_samples = []
 		for sample, haplotypes in incongruents:
 			invalid_samples += f"sample \"{sample}\" haplotypes \"{",".join(haplotypes)}\""
 		invalid_samples_string = " ; ".join(invalid_samples)
-		raise RuntimeError(f"Invalid haplotypes in samples. All samples should have two haplotypes, either \"1\" and \"2\" or \"mat\" and \"pat\". Invalid samples and their haplotypes: {invalid_samples_string}")
+		raise Util.ParameterError(f"Invalid haplotypes in samples. All samples should have two haplotypes, either \"1\" and \"2\" or \"mat\" and \"pat\". Invalid samples and their haplotypes: {invalid_samples_string}")
 	for sample_name, sample_haplotype, _, _ in sample_info:
 		sample_exists = check_if_sample_exists(base_folder, sample_name, sample_haplotype)
 		if sample_exists:
-			raise RuntimeError(f"Sample already exists in the database: name \"{sample_name}\" haplotype \"{sample_haplotype}\"")
+			raise Util.ParameterError(f"Sample already exists in the database: name \"{sample_name}\" haplotype \"{sample_haplotype}\"")
 	tmp_prefix = Util.make_random_prefix()
 	tmp_base_folder = base_folder / ("tmp_" + tmp_prefix)
 	result = None
@@ -109,7 +109,7 @@ def compare_samples_to_database(base_folder, sample_table_file, num_threads, lif
 				samples_with_mismatch.append((name, hap))
 		if len(samples_with_mismatch) >= 1:
 			if not force:
-				raise RuntimeError("Sample annotation does not match IsoformCheck version. Rerun liftover for samples, or if you are sure about what you are doing you can force insert with --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch))
+				raise Util.ParameterError("Sample annotation does not match IsoformCheck version. Rerun liftover for samples, or if you are sure about what you are doing you can force insert with --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch))
 			else:
 				print(f"{datetime.datetime.now().astimezone()}: Sample annotation does not match IsoformCheck version. Adding samples anyway due to --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch), file=sys.stderr)
 		result = get_novel_isoforms_allelesets(base_folder, sample_info_with_annotations, num_threads)
@@ -407,20 +407,20 @@ def read_sample_info_from_table(sample_table_file):
 			row_number += 1
 			parts = l.strip().split("\t")
 			if len(parts) != 3 and len(parts) != 4:
-				raise RuntimeError(f"Sample table file has wrong format. File should be a tab-separated file with three or four columns per row. Row {row_number} has {len(parts)} columns.")
+				raise Util.ParameterError(f"Sample table file has wrong format. File should be a tab-separated file with three or four columns per row. Row {row_number} has {len(parts)} columns.")
 			if row_number == 1:
 				if parts[0].lower() != "sample":
-					raise RuntimeError(f"Sample table file has wrong format. First column should be sample name. Header instead has \"{parts[0]}\".")
+					raise Util.ParameterError(f"Sample table file has wrong format. First column should be sample name. Header instead has \"{parts[0]}\".")
 				if parts[1].lower() != "haplotype":
-					raise RuntimeError(f"Sample table file has wrong format. Second column should be haplotype name. Header instead has \"{parts[1]}\".")
+					raise Util.ParameterError(f"Sample table file has wrong format. Second column should be haplotype name. Header instead has \"{parts[1]}\".")
 				if parts[2].lower() != "assembly":
-					raise RuntimeError(f"Sample table file has wrong format. Third column should be assembly file. Header instead has \"{parts[2]}\".")
+					raise Util.ParameterError(f"Sample table file has wrong format. Third column should be assembly file. Header instead has \"{parts[2]}\".")
 				if len(parts) >= 4 and parts[3].lower() != "annotation":
-					raise RuntimeError(f"Sample table file has wrong format. Fourth column should be annotation file. Header instead has \"{parts[3]}\".")
+					raise Util.ParameterError(f"Sample table file has wrong format. Fourth column should be annotation file. Header instead has \"{parts[3]}\".")
 				has_annotation = (len(parts) == 4)
 				continue
 			if parts[1] not in ["1", "2", "mat", "pat"]:
-				raise RuntimeError(f"Sample table file has wrong format. Row {row_number} haplotype is \"{parts[2]}\", expected one of \"1\", \"2\", \"mat\", \"pat\"")
+				raise Util.ParameterError(f"Sample table file has wrong format. Row {row_number} haplotype is \"{parts[2]}\", expected one of \"1\", \"2\", \"mat\", \"pat\"")
 			annotation = None
 			if has_annotation:
 				if len(parts) >= 4:
@@ -428,9 +428,9 @@ def read_sample_info_from_table(sample_table_file):
 						annotation = parts[3]
 			sample_info.append((parts[0], parts[1], parts[2], annotation))
 			if not Util.file_exists(parts[2]):
-				raise RuntimeError(f"Sample assembly file in row {row_number} cannot be read: file \"{parts[2]}\", sample \"{parts[0]}\" haplotype \"{parts[1]}\"")
+				raise Util.ParameterError(f"Sample assembly file in row {row_number} cannot be read: file \"{parts[2]}\", sample \"{parts[0]}\" haplotype \"{parts[1]}\"")
 			if annotation is not None and not Util.file_exists(annotation):
-				raise RuntimeError(f"Sample annotation file in row {row_number} cannot be read: file \"{parts[3]}\", sample \"{parts[0]}\" haplotype \"{parts[1]}\"")
+				raise Util.ParameterError(f"Sample annotation file in row {row_number} cannot be read: file \"{parts[3]}\", sample \"{parts[0]}\" haplotype \"{parts[1]}\"")
 	return sample_info
 
 def check_sample_duplicates(sample_info):
@@ -493,7 +493,7 @@ def handle_multiple_new_samples_liftoff_and_transcripts_from_table(database_fold
 	sample_info = read_sample_info_from_table(sample_table_file)
 	has_dupes = check_sample_duplicates(sample_info)
 	if has_dupes:
-		raise RuntimeError(f"Duplicate sample and haplotype: sample \"{has_dupes[0]}\" haplotype \"{has_dupes[1]}\"")
+		raise Util.ParameterError(f"Duplicate sample and haplotype: sample \"{has_dupes[0]}\" haplotype \"{has_dupes[1]}\"")
 	Util.verbose_print(0, f"{datetime.datetime.now().astimezone()}: Adding {len(sample_info)} new assemblies", file=sys.stderr)
 	handle_multiple_new_samples_liftoff_and_transcripts(database_folder, sample_info, num_threads, liftoff_path, agc_path, force)
 	Util.verbose_print(0, f"{datetime.datetime.now().astimezone()}: Finished adding {len(sample_info)} new assemblies", file=sys.stderr)
@@ -513,7 +513,7 @@ def handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info
 	for sample_name, sample_haplotype, _, _ in sample_info:
 		sample_exists = check_if_sample_exists(base_folder, sample_name, sample_haplotype)
 		if sample_exists:
-			raise RuntimeError(f"Sample already exists: name \"{sample_name}\" haplotype \"{sample_haplotype}\"")
+			raise Util.ParameterError(f"Sample already exists: name \"{sample_name}\" haplotype \"{sample_haplotype}\"")
 
 	tmp_prefix = Util.make_random_prefix()
 	tmp_base_folder = base_folder / ("tmp_" + tmp_prefix)
@@ -540,7 +540,7 @@ def handle_multiple_new_samples_liftoff_and_transcripts(base_folder, sample_info
 				samples_with_mismatch.append((name, hap))
 		if len(samples_with_mismatch) >= 1:
 			if not force:
-				raise RuntimeError("Sample annotation does not match IsoformCheck version. Rerun liftover for samples, or if you are sure about what you are doing you can force insert with --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch))
+				raise Util.ParameterError("Sample annotation does not match IsoformCheck version. Rerun liftover for samples, or if you are sure about what you are doing you can force insert with --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch))
 			else:
 				print(f"{datetime.datetime.now().astimezone()}: Sample annotation does not match IsoformCheck version. Adding samples anyway due to --force. Samples and haplotypes with invalid versions: " + ", ".join(name + " " + hap for name, hap in samples_with_mismatch), file=sys.stderr)
 		Util.verbose_print(1, f"{datetime.datetime.now().astimezone()}: Adding sample sequences to temporary agc file", file=sys.stderr)

@@ -98,7 +98,7 @@ def add_temporary_groups(database_path, groups):
 		for sample, db_id in cursor.execute("SELECT Name, Id FROM Sample").fetchall():
 			sample_db_id[sample] = db_id
 		for sample, group in groups.items():
-			if sample not in sample_db_id: raise RuntimeError(f"Sample {sample} not found. Note that sample names are case sensitive")
+			if sample not in sample_db_id: raise Util.ParameterError(f"Sample {sample} not found. Note that sample names are case sensitive")
 			additions.append((sample_db_id[sample], name_mapping[group]))
 		cursor.executemany("INSERT INTO SampleGroup (SampleId, GroupName) VALUES (?, ?)", additions)
 	result = {}
@@ -560,7 +560,7 @@ def get_all_transcripts_alleleset_contingency_table_by_group(database_path, grou
 			groups_per_sample[sample].add(group)
 		for sample in groups_per_sample:
 			if len(groups_per_sample[sample]) >= 2:
-				raise RuntimeError(f"Samples are shared between groups {", ".join(groups_per_sample[sample])}")
+				raise Util.ParameterError(f"Samples are shared between groups {", ".join(groups_per_sample[sample])}")
 		allelesets_per_sample = {}
 		for transcript, in cursor.execute(f"SELECT Transcript.Name FROM Transcript", ()).fetchall():
 			if transcript not in allelesets_per_sample: allelesets_per_sample[transcript] = {}
@@ -623,7 +623,7 @@ def get_alleleset_contingency_table_by_group(database_path, transcript_name, gro
 			groups_per_sample[sample].add(group)
 		for sample in groups_per_sample:
 			if len(groups_per_sample[sample]) >= 2:
-				raise RuntimeError(f"Samples are shared between groups {", ".join(groups_per_sample[sample])}")
+				raise Util.ParameterError(f"Samples are shared between groups {", ".join(groups_per_sample[sample])}")
 		allelesets_per_sample = {}
 		for sample, isoform in cursor.execute(f"SELECT Haplotype.SampleId, Isoform.Name FROM Transcript INNER JOIN Isoform ON Isoform.TranscriptId = Transcript.Id INNER JOIN SampleAllele ON SampleAllele.IsoformId = Isoform.Id INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN SampleGroup ON Haplotype.SampleId=SampleGroup.SampleId WHERE Transcript.Name = ? AND SampleGroup.GroupName IN ({",".join("?" for group in groups)})", tuple([transcript_name] + groups)).fetchall():
 			if sample not in allelesets_per_sample: allelesets_per_sample[sample] = []

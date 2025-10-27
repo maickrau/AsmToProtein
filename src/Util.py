@@ -10,6 +10,9 @@ Version = "development"
 
 GlobalVerbosity = 0
 
+class ParameterError(Exception):
+	pass
+
 def get_refannotation_hash(isoformcheck_info_file):
 	result = "not found"
 	with open(isoformcheck_info_file) as f:

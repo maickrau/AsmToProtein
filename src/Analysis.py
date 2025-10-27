@@ -21,13 +21,13 @@ def get_groups_from_tsv(table):
 			if len(l.strip()) == 0: continue
 			parts = l.strip().split("\t")
 			if len(parts) != 2:
-				raise RuntimeError(f"Table file has wrong format. Format should be tab separated file with two columns \"Sample\" and \"Group\". Row {row} has {len(parts)} columns.")
+				raise Util.ParameterError(f"Table file has wrong format. Format should be tab separated file with two columns \"Sample\" and \"Group\". Row {row} has {len(parts)} columns.")
 			if row_number == 1:
 				if parts[0].lower() != "sample" or parts[1].lower() != "group":
-					raise RuntimeError(f"Table file has wrong format. Format should be tab separated file with two columns \"Sample\" and \"Group\". Header does not match.")
+					raise Util.ParameterError(f"Table file has wrong format. Format should be tab separated file with two columns \"Sample\" and \"Group\". Header does not match.")
 				continue
 			if parts[0] in sample_in_group:
-				raise RuntimeError(f"Samples should only belong to a single group. Sample {parts[0]} belongs to groups \"{sample_in_group[parts[0]]}\" and \"{parts[1]}\"")
+				raise Util.ParameterError(f"Samples should only belong to a single group. Sample {parts[0]} belongs to groups \"{sample_in_group[parts[0]]}\" and \"{parts[1]}\"")
 			sample_in_group[parts[0]] = parts[1]
 	return sample_in_group
 
