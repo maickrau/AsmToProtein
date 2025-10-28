@@ -346,7 +346,7 @@ def get_isoforms_of_all_transcripts(base_path):
 			result_per_transcript[transcript].append((name, isoform_sequences[sequenceID], isoform_coverage[isoformid]))
 		result = []
 		for transcript, isoforms in result_per_transcript.items():
-			isoforms.sort()
+			isoforms.sort(key=lambda x: isoform_sort_order(x[0]))
 			result.append((transcript, isoforms))
 		result.sort()
 		return result
