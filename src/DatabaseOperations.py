@@ -33,7 +33,7 @@ def isoform_sort_order(isoform):
 		result *= 26
 		result += ord(c) - ord('A') + 1
 	if is_novel:
-		result *= 10000 # hope there aren't more than 10000 isoforms per transcript lol
+		result += 100000 # hope there aren't more than 100000 isoforms per transcript lol
 	return result
 
 def alleleset_sort_order(alleleset):
