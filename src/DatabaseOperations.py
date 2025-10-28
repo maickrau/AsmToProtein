@@ -319,7 +319,7 @@ def get_isoforms_of_transcript(base_path, transcript):
 		result = []
 		for name, sequenceID, copycount in cursor.execute("SELECT Isoform.Name, Isoform.SequenceID, COUNT(*) FROM Isoform INNER JOIN Transcript ON Isoform.TranscriptId=Transcript.Id INNER JOIN SampleAllele ON SampleAllele.IsoformId=Isoform.Id WHERE Transcript.Name=? GROUP BY Isoform.Name, Isoform.SequenceID", (transcript,)):
 			result.append((name, isoform_sequences[sequenceID], copycount))
-		result.sort()
+		result.sort(key=lambda x: isoform_sort_order(x[0]))
 		return result
 
 def get_isoforms_of_all_transcripts(base_path):
