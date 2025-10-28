@@ -249,7 +249,7 @@ def validate(args):
 	print(f"-db {args.database}", file=sys.stderr)
 	errors = DatabaseOperations.check_if_haplotypes_are_fine(pathlib.Path(args.database) / "sample_info.db")
 	if not DatabaseOperations.check_isoforms_have_names(args.database):
-		errors.append("Some isoforms do not have names. Please run the rename command.", file=sys.stderr)
+		errors.append("Some isoforms do not have names. Please run the rename command.")
 	if len(errors) == 0:
 		print("No validation errors found, everything appears good.", file=sys.stderr)
 	else:
