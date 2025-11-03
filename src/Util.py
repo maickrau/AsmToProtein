@@ -3,15 +3,25 @@
 import gzip
 import random
 import subprocess
+import os
 
 DBVersion = "1"
 
-Version = "development"
+def get_git_version():
+	# https://stackoverflow.com/questions/14989858/get-the-current-git-hash-in-a-python-script
+	# git show -s --format=%ci
+	branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__))).strip().decode().strip()
+	commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__))).strip().decode().strip()
+	time = subprocess.check_output(["git", "show", "-s", "--format=%ci"], cwd=os.path.dirname(os.path.abspath(__file__))).strip().decode().strip()
+	return "branch " + branch + " commit " + commit + " " + time
+
+Version = "development " + get_git_version()
 
 GlobalVerbosity = 0
 
 class ParameterError(Exception):
 	pass
+
 
 def get_refannotation_hash(isoformcheck_info_file):
 	result = "not found"
