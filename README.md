@@ -14,7 +14,7 @@ The isoforms can then be compared between samples to find novel sequences and co
 ![Figure of sample, allele, isoform](docs/sample_allele_isoform.png)
 
 - Sample: a genome assembly consisting of two haplotypes of a single individual.
-- Haplotype: a set of chromosomes with a single copy of each homologous chromosome. That is, one copy of chr1, one copy of chr2, ...etc... , one copy of either chrX or chrY.
+- Haplotype: a set of chromosomes with a single copy of each homologous chromosome. That is, one copy of chr1, one copy of chr2, ...etc... , and one copy of either chrX or chrY.
 - Transcript: a reference transcript, ie. a splice variant of a gene. Only protein coding genes are used.
 - Isoform: a distinct amino acid sequence of a transcript.
 - Allele: a single instance of an isoform in a sample.
