@@ -6,10 +6,10 @@ import pathlib
 import contextlib
 import math
 import traceback
-import DatabaseOperations
-import Analysis
-import HandleAssembly
-import Util
+import isoformchecklib.DatabaseOperations as DatabaseOperations
+import isoformchecklib.Analysis as Analysis
+import isoformchecklib.HandleAssembly as HandleAssembly
+import isoformchecklib.Util as Util
 
 # https://stackoverflow.com/questions/17602878/how-to-handle-both-with-open-and-sys-stdout-nicely
 @contextlib.contextmanager

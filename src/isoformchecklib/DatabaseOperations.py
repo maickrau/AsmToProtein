@@ -8,10 +8,10 @@ import sqlite3
 import shutil
 import datetime
 import itertools
-import SequenceReader
-import Gff3Parser
-import HandleAssembly
-import Util
+import isoformchecklib.SequenceReader as SequenceReader
+import isoformchecklib.Gff3Parser as Gff3Parser
+import isoformchecklib.HandleAssembly as HandleAssembly
+import isoformchecklib.Util as Util
 
 def isoform_sort_order(isoform):
 	"""

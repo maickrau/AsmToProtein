@@ -10,11 +10,11 @@ import sqlite3
 import datetime
 import threading
 import queue
-import Gff3Parser
-import TranscriptExtractor
-import SequenceReader
-import Util
-import DatabaseOperations
+import isoformchecklib.Gff3Parser as Gff3Parser
+import isoformchecklib.TranscriptExtractor as TranscriptExtractor
+import isoformchecklib.SequenceReader as SequenceReader
+import isoformchecklib.Util as Util
+import isoformchecklib.DatabaseOperations as DatabaseOperations
 
 def prepare_fasta(input_path, output_path):
 	"""

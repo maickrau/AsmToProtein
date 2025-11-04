@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import scipy
-import DatabaseOperations
+import isoformchecklib.DatabaseOperations as DatabaseOperations
 
 def get_groups_from_tsv(table):
 	"""

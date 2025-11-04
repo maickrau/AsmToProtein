@@ -2,7 +2,7 @@
 
 import gzip
 import datetime
-import Util
+import isoformchecklib.Util as Util
 
 def parse_attributes(attr_string):
 	attrs = {}

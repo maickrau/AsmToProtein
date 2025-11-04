@@ -3,7 +3,7 @@
 import sys
 import gzip
 import os
-import Util
+import isoformchecklib.Util as Util
 
 def stream_sequences(filepath):
 	"""

@@ -3,9 +3,9 @@
 import os
 import sys
 import datetime
-import Gff3Parser
-import SequenceReader
-import Util
+import isoformchecklib.Gff3Parser as Gff3Parser
+import isoformchecklib.SequenceReader as SequenceReader
+import isoformchecklib.Util as Util
 
 def reverse_complement(seq):
 	complement = str.maketrans('ACGTacgtNn', 'TGCAtgcaNn')
