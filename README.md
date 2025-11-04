@@ -46,6 +46,8 @@ There are three (optionally four) columns:
 
 If you are running a large number of samples, it's faster to first run the `liftover` command separately for each haplotype and then include the lifted over annotation files in the sample table.
 This lets you run the liftover in parallel.
+Comparing samples will not store the novel samples in the database.
+If you want to keep the samples present in the database, see [adding samples to an existing database](#adding-samples-to-an-existing-database).
 
 ### Contingency tables and chi squared tests
 
