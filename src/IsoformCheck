@@ -118,12 +118,12 @@ def contingency_table(args):
 		print("Error: Some isoforms do not have names. Please run the rename command.", file=sys.stderr)
 		exit(1)
 	if len(groups) < 2 and args.table is None:
-		print("Either sample table (--sample) or at least two groups (--group) are required", file=sys.stderr)
+		print("Either sample table (--table) or at least two groups (--group) are required", file=sys.stderr)
 		print("Groups should all be listed at once (eg. \"--group group1 group2 group3\", not \"--group group1 --group group2 --group group3\")", file=sys.stderr)
 		exit(1)
 	if args.table is not None and len(groups) >= 2:
-		print("Cannot use both --sample and --group parameters", file=sys.stderr)
-		print("Select only either sample table (--sample) or two or more groups (--group)", file=sys.stderr)
+		print("Cannot use both --table and --group parameters", file=sys.stderr)
+		print("Select only either sample table (--table) or two or more groups (--group)", file=sys.stderr)
 		exit(1)
 	if len(groups) >= 2:
 		headergroups, info_per_transcript = Analysis.get_contingency_tables(pathlib.Path(args.database) / "sample_info.db", groups, args.transcript)
@@ -214,12 +214,12 @@ def chi_square(args):
 		print("Error: Some isoforms do not have names. Please run the rename command.", file=sys.stderr)
 		exit(1)
 	if len(groups) < 2 and args.table is None:
-		print("Either sample table (--sample) or at least two groups (--group) are required", file=sys.stderr)
+		print("Either sample table (--table) or at least two groups (--group) are required", file=sys.stderr)
 		print("Groups should all be listed at once (eg. \"--group group1 group2 group3\", not \"--group group1 --group group2 --group group3\")", file=sys.stderr)
 		exit(1)
 	if args.table is not None and len(groups) >= 2:
-		print("Cannot use both --sample and --group parameters", file=sys.stderr)
-		print("Select only either sample table (--sample) or two or more groups (--group)", file=sys.stderr)
+		print("Cannot use both --table and --group parameters", file=sys.stderr)
+		print("Select only either sample table (--table) or two or more groups (--group)", file=sys.stderr)
 		exit(1)
 	if len(groups) >= 2:
 		total_sample_size, group_counts, p_values = Analysis.chi_squared_test(pathlib.Path(args.database) / "sample_info.db", groups, args.transcript)
