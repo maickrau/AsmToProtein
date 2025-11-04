@@ -61,6 +61,17 @@ The group file format is a tab separated file with two columns:
 
 Then the command `contingencytable` can be used to generate contingency tables either for a single transcript or all transcripts, and `chisquare` can be used to run chi squared tests either for a single transcript or all transcripts.
 
+### Export isoforms and allele sets
+
+The command `exportisoforms` can be used to export all isoforms present in the database.
+The result will be a tab separated table file which lists isoforms, their names, their copy counts in the database samples, and amino acid sequences.
+Similarly `exportallelesets` can be used to export all allele sets per samples present in the database.
+The result will be a tab separated table file which lists the allele sets per sample per transcript.
+
+By default these tables will only include transcript ID without gene name.
+Use the parameter `--include-gene-info` to additionally include gene name and gene reference chromosome in the table.
+By default all transcripts are included, and the results can also be filtered to a single transcript with the parameter `--transcript`.
+
 ### Prebuilt IsoformCheck databases of long read samples
 
 A database of 231 samples from the [Human Pangenome Reference Consortium](https://humanpangenome.org/) and 61 samples from the [Human Genome Structural Variation Consortium](https://www.hgsvc.org/).
