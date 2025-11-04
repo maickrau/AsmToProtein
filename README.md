@@ -58,6 +58,7 @@ You can either use the `addgroup` command which stores the groups in the databas
 The group file format is a tab separated file with two columns:
 - `Sample`: name of sample
 - `Group`: name of group
+
 Then the command `contingencytable` can be used to generate contingency tables either for a single transcript or all transcripts, and `chisquare` can be used to run chi squared tests either for a single transcript or all transcripts.
 
 ### Prebuilt IsoformCheck databases of long read samples
