@@ -26,7 +26,7 @@ The isoforms can then be compared between samples to find novel sequences and co
 
 IsoformCheck can be used to detect novel isoforms and allele sets in samples.
 This requires haplotype phased assemblies of the novel samples, and compares the protein coding transcripts present in the novel samples with existing samples in an IsoformCheck database.
-To do this, you first need a pre-existing database of haplotype phased samples (see #prebuilt-isoformcheck-databases-of-long-read-samples).
+To do this, you first need a pre-existing database of haplotype phased samples (see [prebuilt databases](#prebuilt-isoformcheck-databases-of-long-read-samples)).
 Then use the `comparesamples` command of IsoformCheck.
 
 The output will have three tables:
