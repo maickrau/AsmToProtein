@@ -28,7 +28,7 @@ The isoforms can then be compared between samples to find novel sequences and co
 IsoformCheck can be used to detect novel isoforms and allele sets in samples.
 This requires haplotype phased assemblies of the novel samples and an IsoformCheck database of pre-existing samples, and compares the protein coding transcripts present in the novel samples with the previous samples.
 To do this, you first need a pre-existing database of haplotype phased samples (see [prebuilt databases](#prebuilt-isoformcheck-databases-of-long-read-samples)).
-Then use the `comparesamples` command of IsoformCheck.
+Then use the `comparesamples` command of IsoformCheck: `IsoformCheck comparesamples -db db --table sample_table.tsv -o output`.
 
 The output will have three tables:
 - `output_allelesets.tsv`: All allele sets of the given novel samples.
@@ -36,8 +36,8 @@ The output will have three tables:
 - `output_novel_allelesets.tsv`: Allele sets which are novel to the samples and not previously present in the database.
 
 The command `comparesamples` requires a table of samples.
-The format of the table is a table separated file.
-Each row is a single haplotype, so each sample will have two rows.
+The format of the table is a tab separated file.
+Each row is a single haplotype, so each sample should have two rows.
 There are three (optionally four) columns:
 - `Sample`: Name of sample.
 - `Haplotype`: Sample haplotype in this row. Must be one of 1, 2, mat or pat.
@@ -74,7 +74,10 @@ By default all transcripts are included, and the results can also be filtered to
 
 ### Prebuilt IsoformCheck databases of long read samples
 
-A database of 231 samples from the [Human Pangenome Reference Consortium](https://humanpangenome.org/) and 61 samples from the [Human Genome Structural Variation Consortium](https://www.hgsvc.org/).
+[IsoformCheck_v1_20251015.tar.gz](https://zenodo.org/records/17541941) ([direct download link](https://zenodo.org/records/17541941/files/IsoformCheck_db_v1_20251015.tar.gz?download=1)): A database of 231 samples from the [Human Pangenome Reference Consortium](https://humanpangenome.org/) and 61 samples from the [Human Genome Structural Variation Consortium](https://www.hgsvc.org/).
+
+To use the database, unzip with `tar -xzf IsoformCheck_v1_20251015.tar.gz`, which creates the folder `db`.
+Then give that folder as a parameter to IsoformCheck, eg. `IsoformCheck stats -db db`.
 
 ### Building your own database
 
