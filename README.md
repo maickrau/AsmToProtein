@@ -26,7 +26,7 @@ The isoforms can then be compared between samples to find novel sequences and co
 ![Figure of comparing novel samples to a database](docs/compare_samples_to_database.png)
 
 IsoformCheck can be used to detect novel isoforms and allele sets in samples.
-This requires haplotype phased assemblies of the novel samples, and compares the protein coding transcripts present in the novel samples with existing samples in an IsoformCheck database.
+This requires haplotype phased assemblies of the novel samples and an IsoformCheck database of pre-existing samples, and compares the protein coding transcripts present in the novel samples with the previous samples.
 To do this, you first need a pre-existing database of haplotype phased samples (see [prebuilt databases](#prebuilt-isoformcheck-databases-of-long-read-samples)).
 Then use the `comparesamples` command of IsoformCheck.
 
@@ -81,6 +81,15 @@ A database of 231 samples from the [Human Pangenome Reference Consortium](https:
 Run the `initialize` command with a reference genome and reference annotation.
 This filters the annotation into only transcripts which have coding sequences defined and creates an IsoformCheck database folder.
 After this [add your samples to the database](#adding-samples-to-an-existing-database).
+
+The contents of an IsoformDatabase folder are the following:
+- `info.txt`: General information about the database.
+- `reference.fa`: Reference sequence.
+- `reference.gff3` and `reference.gff3_db`: Reference annotation.
+- `sample_annotations/`: Stores the lifted over gff3 files of each haplotype.
+- `sequences.agc`: [agc file](https://github.com/refresh-bio/agc) that stores the sequences of each haplotype.
+- `isoforms.fa`: Amino acid sequences of all isoforms. Use the `exportisoforms` command to view isoforms.
+- `sample_info.db`: SQL database linking samples, alleles and isoforms together.
 
 ### Adding samples to an existing database
 
