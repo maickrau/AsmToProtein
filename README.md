@@ -75,7 +75,7 @@ By default all transcripts are included, and the results can also be filtered to
 
 ### Prebuilt IsoformCheck databases of long read samples
 
-[IsoformCheck_v1_20251015.tar.gz](https://zenodo.org/records/17541941) ([direct download link](https://zenodo.org/records/17541941/files/IsoformCheck_db_v1_20251015.tar.gz?download=1)): A database of 231 samples from the [Human Pangenome Reference Consortium](https://humanpangenome.org/) and 61 samples from the [Human Genome Structural Variation Consortium](https://www.hgsvc.org/).
+[IsoformCheck_v1_20251015.tar.gz](https://zenodo.org/records/17541941) ([direct download link](https://zenodo.org/records/17541941/files/IsoformCheck_db_v1_20251015.tar.gz?download=1)): A database of 292 samples (231 samples from the [HPRC](https://humanpangenome.org/) and 61 samples from the [HGSVC](https://www.hgsvc.org/)).
 
 To use the database, unzip with `tar -xzf IsoformCheck_v1_20251015.tar.gz`, which creates the folder `db`.
 Then give that folder as a parameter to IsoformCheck, eg. `IsoformCheck stats -db db`.
