@@ -337,6 +337,7 @@ def get_isoforms_of_all_transcripts(base_path):
 
 	with sqlite3.connect(str(base_path / "sample_info.db")) as connection:
 		cursor = connection.cursor()
+		cursor.arraysize = 10000
 		result_per_transcript = {}
 		isoform_coverage = {}
 		for isoformid, coverage in cursor.execute("SELECT IsoformId, COUNT(*) FROM SampleAllele GROUP BY IsoformId", ()):
