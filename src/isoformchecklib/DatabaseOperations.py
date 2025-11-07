@@ -563,6 +563,7 @@ def get_all_transcripts_alleleset_contingency_table_by_group(database_path, grou
 
 	with sqlite3.connect(str(database_path)) as connection:
 		cursor = connection.cursor()
+		cursor.arraysize = 10000
 		samples_per_group = {}
 		groups_per_sample = {}
 		# check for any overlapping samples
@@ -577,7 +578,14 @@ def get_all_transcripts_alleleset_contingency_table_by_group(database_path, grou
 		allelesets_per_sample = {}
 		for transcript, in cursor.execute(f"SELECT Transcript.Name FROM Transcript", ()).fetchall():
 			if transcript not in allelesets_per_sample: allelesets_per_sample[transcript] = {}
-		for transcript, sample, isoform in cursor.execute(f"SELECT Transcript.Name, Haplotype.SampleId, Isoform.Name FROM Transcript INNER JOIN Isoform ON Isoform.TranscriptId = Transcript.Id INNER JOIN SampleAllele ON SampleAllele.IsoformId = Isoform.Id INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN SampleGroup ON Haplotype.SampleId=SampleGroup.SampleId WHERE SampleGroup.GroupName IN ({",".join("?" for group in groups)})", tuple(groups)).fetchall():
+		isoform_name = {}
+		isoform_transcript = {}
+		for transcript, name, isoform_id in cursor.execute("SELECT Transcript.Name, Isoform.Name, Isoform.Id FROM Isoform INNER JOIN Transcript ON Isoform.TranscriptId=Transcript.Id", ()).fetchall():
+			isoform_name[isoform_id] = name
+			isoform_transcript[isoform_id] = transcript
+		for sample, isoform_id in cursor.execute(f"SELECT Haplotype.SampleId, SampleAllele.IsoformId FROM SampleAllele INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN SampleGroup ON Haplotype.SampleId=SampleGroup.SampleId WHERE SampleGroup.GroupName IN ({",".join("?" for group in groups)})", tuple(groups)).fetchall():
+			isoform = isoform_name[isoform_id]
+			transcript = isoform_transcript[isoform_id]
 			assert transcript in allelesets_per_sample
 			if sample not in allelesets_per_sample[transcript]: allelesets_per_sample[transcript][sample] = []
 			allelesets_per_sample[transcript][sample].append(isoform)
