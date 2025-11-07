@@ -457,13 +457,25 @@ def get_all_allelesets(database_path):
 	"""
 	with sqlite3.connect(str(database_path)) as connection:
 		cursor = connection.cursor()
+		cursor.arraysize = 10000
 		allelesets_per_sample = {}
 		all_samples = set()
 		for sample, in cursor.execute("SELECT Sample.Name FROM Sample"):
 			all_samples.add(sample)
 		all_samples = list(all_samples)
 		all_samples.sort()
-		for transcript, sample, isoform in cursor.execute(f"SELECT Transcript.Name, Sample.Name, Isoform.Name FROM Transcript INNER JOIN Isoform ON Isoform.TranscriptId = Transcript.Id INNER JOIN SampleAllele ON SampleAllele.IsoformId = Isoform.Id INNER JOIN Haplotype ON SampleAllele.HaplotypeId = Haplotype.Id INNER JOIN Sample ON Haplotype.SampleId=Sample.Id", ()).fetchall():
+		isoform_name = {}
+		isoform_transcript = {}
+		for transcript, name, isoform_id in cursor.execute("SELECT Transcript.Name, Isoform.Name, Isoform.Id FROM Isoform INNER JOIN Transcript ON Isoform.TranscriptId=Transcript.Id", ()).fetchall():
+			isoform_name[isoform_id] = name
+			isoform_transcript[isoform_id] = transcript
+		haplotype_name = {}
+		for haplotypeid, name in cursor.execute("SELECT Haplotype.Id, Sample.Name FROM Haplotype INNER JOIN Sample ON Haplotype.SampleId=Sample.Id", ()).fetchall():
+			haplotype_name[haplotypeid] = name
+		for isoform_id, haplotype_id in cursor.execute("SELECT IsoformId, HaplotypeId FROM SampleAllele", ()).fetchall():
+			transcript = isoform_transcript[isoform_id]
+			sample = haplotype_name[haplotype_id]
+			isoform = isoform_name[isoform_id]
 			if transcript not in allelesets_per_sample: allelesets_per_sample[transcript] = {}
 			if sample not in allelesets_per_sample[transcript]: allelesets_per_sample[transcript][sample] = []
 			allelesets_per_sample[transcript][sample].append(isoform)
