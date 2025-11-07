@@ -20,6 +20,7 @@ The isoforms can then be compared between samples to find novel sequences and co
 - Allele: a single instance of an isoform in a sample.
 - Allele set: all alleles of a single sample for a single transcript.
 - Group: an arbitrary group of samples used for creating contingency tables and running chi squared tests.
+- IsoformCheck database: a folder with isoform and allele information of a set of samples.
 
 ### Detecting novel isoforms and allele sets
 
@@ -44,7 +45,7 @@ There are three (optionally four) columns:
 - `Assembly`: Path to a fasta/fastq file of this haplotype.
 - `Annotation`: This is optional and the column can be left out, and if present can be left blank for any row. Path to a lifted over annotation file for this haplotype. If this is present, then the given file is used as the annotation, otherwise IsoformCheck will run liftover for the haplotype.
 
-If you are running a large number of samples, it's faster to first run the `liftover` command separately for each haplotype and then include the lifted over annotation files in the sample table.
+If you are running a large number of samples, it's faster to first run the `liftover` command separately for each haplotype and then include the lifted over annotation files in the sample table Annotation column.
 This lets you run the liftover in parallel.
 Comparing samples will not store the novel samples in the database.
 If you want to keep the samples present in the database, see [adding samples to an existing database](#adding-samples-to-an-existing-database).
