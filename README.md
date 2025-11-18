@@ -9,6 +9,11 @@ Reference transcript annotations are lifted over to samples with [liftoff](https
 The coding sequences of the lifted over annotations are used to call amino acid sequences of the transcripts.
 The isoforms can then be compared between samples to find novel sequences and copy count variation.
 
+### Installation
+
+Recommended to install via bioconda: `conda create -n isoformcheck isoformcheck liftoff=1.6.3`.
+Note that using bioconda to install just IsoformCheck does not automatically ensure that the latest version of liftoff gets installed, which is why the install command specifies liftoff version 1.6.3 to make sure.
+
 ### Glossary
 
 ![Figure of sample, allele, isoform](docs/sample_allele_isoform.png)
