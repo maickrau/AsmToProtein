@@ -12,6 +12,7 @@ The isoforms can then be compared between samples to find novel sequences and co
 ### Installation
 
 Recommended to install via bioconda: `conda create -n isoformcheck isoformcheck liftoff=1.6.3`.
+This will create an environment named `isoformcheck` which has IsoformCheck installed.
 Note that using bioconda to install just IsoformCheck does not automatically ensure that the latest version of liftoff gets installed, which is why the install command specifies liftoff version 1.6.3 to make sure.
 
 ### Glossary
